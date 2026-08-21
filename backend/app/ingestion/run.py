@@ -113,6 +113,39 @@ CREATE TABLE IF NOT EXISTS dataset_meta (
     key   TEXT PRIMARY KEY,
     value TEXT NOT NULL
 );
+
+-- Runtime state below survives data-pack re-ingestion on purpose: staged and
+-- executed actions form an audit trail that must never be wiped by a refresh.
+CREATE TABLE IF NOT EXISTS pending_actions (
+    id          TEXT PRIMARY KEY,
+    created_at  TEXT NOT NULL,
+    caller_json TEXT NOT NULL,
+    action_type TEXT NOT NULL,
+    params_json TEXT NOT NULL,
+    preview_json TEXT NOT NULL,
+    status      TEXT NOT NULL DEFAULT 'pending'
+                CHECK (status IN ('pending','executed','cancelled'))
+);
+
+CREATE TABLE IF NOT EXISTS actions_log (
+    id           INTEGER PRIMARY KEY AUTOINCREMENT,
+    created_at   TEXT NOT NULL,
+    account_id   TEXT,
+    actor_json   TEXT NOT NULL,
+    action_type  TEXT NOT NULL,
+    payload_json TEXT NOT NULL,
+    result_json  TEXT NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS follow_up_tasks (
+    task_id    TEXT PRIMARY KEY,
+    account_id TEXT NOT NULL REFERENCES accounts(account_id),
+    subject    TEXT NOT NULL,
+    due_at     TEXT,
+    created_at TEXT NOT NULL,
+    created_by TEXT NOT NULL,
+    status     TEXT NOT NULL DEFAULT 'open'
+);
 """
 
 TABLES_TO_DROP = ["document_sections", "documents", "tickets", "orders", "accounts", "dataset_meta"]

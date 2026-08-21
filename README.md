@@ -65,7 +65,7 @@ See `.env.example`. Never commit real secrets.
 ## Status / roadmap
 
 - [x] Step 0 - scaffold
-- [ ] Step 1 - data ingestion (PDFs -> chunked corpus, XLSX -> SQLite)
+- [x] Step 1 - data ingestion (PDFs -> chunked corpus, XLSX -> SQLite)
 - [ ] Step 2 - document retrieval with source-authority ranking
 - [ ] Step 3 - structured-data lookup + SLA/credit calculations
 - [ ] Step 4 - action tools with confirmation gating

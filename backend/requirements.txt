@@ -3,9 +3,15 @@ fastapi==0.141.1
 uvicorn==0.52.4
 pydantic-settings==2.15.0
 
+# Data-pack ingestion (Step 1)
+pypdf==6.16.1
+openpyxl==3.1.5
+# fixture-pack generator only (scripts/make_fixture_pack.py)
+fpdf2==2.8.8
+
 # Test suite
 pytest==9.1.1
 httpx==0.28.1
 
 # Added in later steps:
-#   anthropic, chromadb, openpyxl, pypdf/pdfplumber, rank-bm25
+#   anthropic, chromadb, rank-bm25

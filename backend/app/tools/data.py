@@ -65,8 +65,8 @@ def get_ticket(conn: sqlite3.Connection, ticket_id: str) -> dict[str, Any]:
 
 def list_tickets_for_account(conn: sqlite3.Connection, account_id: str, limit: int = 50) -> list[dict[str, Any]]:
     rows = conn.execute(
-        """SELECT ticket_id, order_id, category, subject, priority, created_at,
-                  first_response_at, resolved_at, status
+        """SELECT ticket_id, account_id, order_id, category, subject, priority,
+                  created_at, first_response_at, resolved_at, status
            FROM tickets WHERE account_id = ? ORDER BY created_at DESC LIMIT ?""",
         (account_id, limit),
     ).fetchall()

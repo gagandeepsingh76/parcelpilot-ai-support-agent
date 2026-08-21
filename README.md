@@ -69,7 +69,7 @@ See `.env.example`. Never commit real secrets.
 - [x] Step 2 - document retrieval with source-authority ranking
 - [x] Step 3 - structured-data lookup + SLA/credit calculations
 - [x] Step 4 - action tools with confirmation gating
-- [ ] Step 5 - access-control layer + cross-account denial tests
+- [x] Step 5 - access-control layer + cross-account denial tests
 - [ ] Step 6 - agent orchestration + escalation policy
 - [ ] Step 7 - chat UI with tool visibility
 - [ ] Step 8 - proactive issue-detection dashboard

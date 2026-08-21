@@ -9,6 +9,9 @@ openpyxl==3.1.5
 # fixture-pack generator only (scripts/make_fixture_pack.py)
 fpdf2==2.8.8
 
+# Document retrieval (Step 2) - local vector store + bundled MiniLM embedder
+chromadb==1.5.9
+
 # Test suite
 pytest==9.1.1
 httpx==0.28.1

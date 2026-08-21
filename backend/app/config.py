@@ -42,6 +42,24 @@ class Settings(BaseSettings):
     def cors_origins(self) -> List[str]:
         return [o.strip() for o in self.backend_cors_origins.split(",") if o.strip()]
 
+    @staticmethod
+    def _resolve(path_value: str) -> str:
+        from app.ingestion.run import resolve_path
+
+        return str(resolve_path(path_value))
+
+    @property
+    def sqlite_db_path_resolved(self) -> str:
+        return self._resolve(self.sqlite_db_path)
+
+    @property
+    def vector_store_dir_resolved(self) -> str:
+        return self._resolve(self.vector_store_dir)
+
+    @property
+    def data_pack_dir_resolved(self) -> str:
+        return self._resolve(self.data_pack_dir)
+
 
 @lru_cache
 def get_settings() -> Settings:

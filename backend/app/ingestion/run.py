@@ -126,7 +126,7 @@ def _resolve_customer_scope_for_accounts(accounts: list[dict]) -> list[str]:
     return warnings
 
 
-def ingest(source_dir: str | Path, db_path: str | Path) -> dict:
+def ingest(source_dir: str | Path, db_path: str | Path, *, include_vectors: bool = True) -> dict:
     source = resolve_path(source_dir)
     db_path = resolve_path(db_path)
 
@@ -253,6 +253,11 @@ def ingest(source_dir: str | Path, db_path: str | Path) -> dict:
                     f"{meta['filename']} -> id={meta['doc_id']} type={meta['doc_type']} "
                     f"status={meta['status']} scope={meta['customer_scope']} v{meta['version'] or '?'}"
                 )
+        vector_chunks = 0
+        if include_vectors:
+            from app.rag.vectorstore import rebuild as rebuild_vector_store
+
+            vector_chunks = rebuild_vector_store(conn, resolve_path(get_settings().vector_store_dir))
         summary = {
             "db_path": str(db_path),
             "snapshot_utc": snapshot_utc,
@@ -260,7 +265,9 @@ def ingest(source_dir: str | Path, db_path: str | Path) -> dict:
             "orders": len(orders),
             "tickets": len(tickets),
             "documents": len(pdf_paths),
+            "vector_chunks": vector_chunks,
             "warnings": warnings,
+            "documents_parsed": [s for s in doc_summaries],
         }
         return summary
     finally:
@@ -328,13 +335,14 @@ def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description="Rebuild the ParcelPilot SQLite database from the data pack.")
     parser.add_argument("--source", default=None, help="folder containing PDFs + XLSX (default: DATA_PACK_DIR, repo-root-relative)")
     parser.add_argument("--db", default=None, help="output SQLite database path (default: SQLITE_DB_PATH, repo-root-relative)")
+    parser.add_argument("--skip-vectors", action="store_true", help="skip rebuilding the Chroma vector index")
     args = parser.parse_args(argv)
     # Explicit CLI args resolve against the current directory; settings
     # defaults are documented as repo-root-relative and resolved that way.
     source = Path(args.source).resolve() if args.source else resolve_path(get_settings().data_pack_dir)
     db = Path(args.db).resolve() if args.db else resolve_path(get_settings().sqlite_db_path)
     try:
-        summary = ingest(source, db)
+        summary = ingest(source, db, include_vectors=not args.skip_vectors)
     except IngestionError as exc:
         print(f"[ingest] FAILED: {exc}", file=sys.stderr)
         return 1
@@ -344,7 +352,10 @@ def main(argv: list[str] | None = None) -> int:
     print(f"[ingest] database rebuilt at {summary['db_path']}")
     print(f"[ingest] snapshot_utc = {summary['snapshot_utc']}")
     print(f"[ingest] accounts={summary['accounts']} orders={summary['orders']} "
-          f"tickets={summary['tickets']} documents={summary['documents']}")
+          f"tickets={summary['tickets']} documents={summary['documents']} "
+          f"vector_chunks={summary['vector_chunks']}")
+    for doc_line in summary.get("documents_parsed", []):
+        print(f"[ingest][doc] {doc_line}")
     for warning in summary["warnings"]:
         print(f"[ingest][warn] {warning}", file=sys.stderr)
     return 0

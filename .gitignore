@@ -1,0 +1,38 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+# Environment / secrets
+.env
+.env.local
+*.pem
+
+# Generated data artefacts (SQLite DB, vector store, ingested chunks)
+backend/data/
+data/*.db
+data/chroma/
+
+# Candidate data pack is proprietary assessment material - keep local only
+data_pack/*
+!data_pack/README.md
+
+# Node / Next.js
+node_modules/
+.next/
+out/
+next-env.d.ts
+npm-debug.log*
+yarn-error.log*
+
+# OS / editors
+.DS_Store
+Thumbs.db
+desktop.ini
+.vscode/
+.idea/

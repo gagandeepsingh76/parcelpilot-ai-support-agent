@@ -1,0 +1,11 @@
+# Pinned after a clean install on Python 3.13 (Step 0)
+fastapi==0.141.1
+uvicorn==0.52.4
+pydantic-settings==2.15.0
+
+# Test suite
+pytest==9.1.1
+httpx==0.28.1
+
+# Added in later steps:
+#   anthropic, chromadb, openpyxl, pypdf/pdfplumber, rank-bm25

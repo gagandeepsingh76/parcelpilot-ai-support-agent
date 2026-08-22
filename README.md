@@ -75,16 +75,18 @@ npm run dev                      # http://localhost:3000
 
 See `.env.example`. Never commit real secrets.
 
-## Deployment (free tier)
+## Deployment (free tier) — LIVE
 
-- **Backend -> Render**: `render.yaml` blueprint at the repo root. Set
-  `ANTHROPIC_API_KEY` in the dashboard; update `BACKEND_CORS_ORIGINS` to your
-  Vercel URL. Free-tier disks are ephemeral, so `app/deploy_bootstrap.py`
-  re-ingests on boot - from `data_pack/` when the real pack is present, else
-  from the committed synthetic fixtures.
-- **Frontend -> Vercel**: import the repo, root directory `frontend`. Set
-  `NEXT_PUBLIC_API_BASE_URL` to the Render URL (e.g.
-  `https://parcelpilot-agent-api.onrender.com`).
+- **Frontend**: https://parcelpilot-frontend.vercel.app
+- **Backend API**: https://parcelpilot-agent-api.onrender.com (health: `/health`, docs: `/docs`)
+- **Backend -> Render**: created from `render.yaml` settings. Free-tier disks are
+  ephemeral, so `app/deploy_bootstrap.py` re-ingests on boot - from
+  `data_pack/` when the real pack is present, else from the committed
+  synthetic fixtures.
+- **Frontend -> Vercel**: project `parcelpilot-frontend`, root directory
+  `frontend`, with `NEXT_PUBLIC_API_BASE_URL` pointing at the Render URL.
+- Note: Render free instances sleep after ~15 min idle; first request may
+  take ~50 s to cold-start and rebuild the index.
 
 ## Status / roadmap
 

@@ -67,6 +67,7 @@ export default function ChatPage() {
       setToken(saved);
       setSessionKey(savedSession);
     }
+    setCallerName(window.localStorage.getItem("pp_user") || "");
   }, []);
 
   useEffect(() => {
@@ -140,6 +141,18 @@ export default function ChatPage() {
     },
     [input, token, busy, messages]
   );
+
+  const signOut = useCallback(() => {
+    window.localStorage.removeItem("pp_token");
+    window.localStorage.removeItem("pp_session");
+    window.localStorage.removeItem("pp_user");
+    setToken("");
+    setCallerName("");
+    setMessages([]);
+    setReceipts({});
+    setInput("");
+    setError(null);
+  }, []);
 
   const actOnPending = useCallback(
     async (pendingId: string, decision: "confirm" | "cancel") => {
@@ -283,6 +296,9 @@ export default function ChatPage() {
               <span className={`pill ${isStaff ? "internal" : "customer"}`}>
                 {isStaff ? "INTERNAL" : "CUSTOMER"}
               </span>
+              <button className="ghost-btn" onClick={signOut}>
+                Sign out
+              </button>
             </header>
 
             <div className="thread-wrap">

@@ -32,6 +32,9 @@ class Settings(BaseSettings):
     openrouter_model: str = "google/gemini-2.5-flash"
     openrouter_base_url: str = "https://openrouter.ai/api/v1"
 
+    # Auth - HMAC secret for signed login tokens (set a strong value in prod)
+    auth_secret: str = "dev-only-change-me-parcelpilot"
+
     # Data locations
     data_pack_dir: str = "./data_pack"
     sqlite_db_path: str = "./data/parcelpilot.db"

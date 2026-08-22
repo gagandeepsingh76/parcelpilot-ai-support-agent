@@ -64,6 +64,61 @@ def login(body: LoginRequest) -> dict[str, Any]:
     return {"token": token, "caller": caller.describe()}
 
 
+class AuthLoginRequest(BaseModel):
+    username: str
+    password: str
+
+
+class AuthRegisterRequest(BaseModel):
+    username: str
+    password: str
+    account_id: str
+    display_name: str | None = None
+
+
+@router.post("/auth/login")
+def auth_login(
+    body: AuthLoginRequest, conn: sqlite3.Connection = Depends(get_conn)
+) -> dict[str, Any]:
+    """Credential login for both user kinds (customers and internal staff)."""
+    from app import auth
+
+    try:
+        caller = auth.authenticate(conn, body.username, body.password)
+        token = auth.issue_token(caller)
+    except AccessDeniedError as exc:
+        raise HTTPException(status_code=401, detail=str(exc)) from exc
+    # the session_id inside a signed token is stable per username; re-issue so
+    # stage/confirm flows see one consistent session id
+    resolved = auth.resolve_signed_token(f"Bearer {token}")
+    return {"token": token, "caller": (resolved or caller).describe()}
+
+
+@router.post("/auth/register")
+def auth_register(
+    body: AuthRegisterRequest, conn: sqlite3.Connection = Depends(get_conn)
+) -> dict[str, Any]:
+    """Self-service registration for CUSTOMER logins on existing accounts.
+
+    Internal staff are provisioned out-of-band (seeded demo users here).
+    """
+    from app import auth
+
+    try:
+        caller = auth.register_customer(
+            conn, body.username, body.password, body.account_id, body.display_name
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    except FileExistsError as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
+    except LookupError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+
+    token = auth.issue_token(caller)
+    return {"token": token, "caller": caller.describe()}
+
+
 @router.get("/me")
 def me(caller: Caller = Depends(current_caller)) -> dict[str, Any]:
     return caller.describe()

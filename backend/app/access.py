@@ -281,6 +281,14 @@ class SessionRegistry:
         if not authorization_header or not authorization_header.startswith("Bearer "):
             raise AccessDeniedError("missing bearer credentials")
         token = authorization_header.removeprefix("Bearer ").strip()
+
+        # real credential tokens take precedence; mock tokens still resolve
+        from app.auth import resolve_signed_token
+
+        signed = resolve_signed_token(authorization_header)
+        if signed is not None:
+            return signed
+
         session_key = self.tokens.get(token)
         if session_key is None:
             raise AccessDeniedError("invalid or expired session token")

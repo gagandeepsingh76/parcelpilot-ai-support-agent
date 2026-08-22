@@ -32,6 +32,16 @@ app.add_middleware(
 app.include_router(api_router)
 
 
+@app.on_event("startup")
+def seed_auth_tables() -> None:
+    """Ensure credential-auth tables + demo users exist before first request."""
+    import sqlite3
+
+    from app import auth
+
+    auth.bootstrap_auth(settings.sqlite_db_path_resolved)
+
+
 @app.get("/health")
 @app.get("/api/health")
 def health() -> dict:

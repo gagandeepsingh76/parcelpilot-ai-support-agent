@@ -135,20 +135,23 @@ class _MessagesNamespace:
         self.create = create_callable
 
 
-class GeminiClient:
-    """`.messages.create()`-compatible client over Gemini's OpenAI endpoint."""
+class OpenAICompatClient:
+    """`.messages.create()`-compatible client over any OpenAI-compatible API.
 
-    def __init__(self, api_key: str, base_url: str, model: str):
+    Covers Gemini's compat endpoint, OpenRouter, and similar gateways.
+    """
+
+    def __init__(self, api_key: str, base_url: str, model: str, extra_headers: dict | None = None):
         import httpx
 
         if not api_key or api_key.startswith("your-"):
             raise RuntimeError(
-                "GEMINI_API_KEY is not configured - set it in backend/.env "
-                "(or switch LLM_PROVIDER back to 'anthropic')"
+                "No API key configured for this provider - check the *_API_KEY "
+                "value in backend/.env"
             )
         self.model = model
         self._url = f"{base_url.rstrip('/')}/chat/completions"
-        self._headers = {"Authorization": f"Bearer {api_key}"}
+        self._headers = {"Authorization": f"Bearer {api_key}", **(extra_headers or {})}
         self._http = httpx.Client(timeout=120)
         self.messages = _MessagesNamespace(self._create)
 
@@ -183,7 +186,7 @@ class GeminiClient:
                 time.sleep(wait)
                 continue
             break
-        raise RuntimeError(f"Gemini request failed {last_error}")
+        raise RuntimeError(f"LLM provider request failed {last_error}")
 
 
 class AnthropicClientAdapter:
@@ -214,13 +217,31 @@ def build_llm_client() -> Any:
         return Anthropic(api_key=key)
 
     if provider == "gemini":
-        return GeminiClient(
+        return OpenAICompatClient(
             api_key=settings.gemini_api_key,
             base_url=settings.gemini_base_url,
             model=settings.gemini_model,
         )
 
-    raise RuntimeError(f"Unknown LLM_PROVIDER '{provider}' (use 'anthropic' or 'gemini')")
+    if provider == "openrouter":
+        # attribution headers are requested by OpenRouter's ecosystem policy
+        return OpenAICompatClient(
+            api_key=settings.openrouter_api_key,
+            base_url=settings.openrouter_base_url,
+            model=settings.openrouter_model,
+            extra_headers={
+                "HTTP-Referer": "https://github.com/parcelpilot-demo",
+                "X-Title": "ParcelPilot AI Support Agent",
+            },
+        )
+
+    raise RuntimeError(
+        f"Unknown LLM_PROVIDER '{provider}' (use 'anthropic', 'gemini' or 'openrouter')"
+    )
+
+
+# backwards-compatible alias: the Gemini path is just an OpenAI-compat client
+GeminiClient = OpenAICompatClient
 
 
 __all__ = [

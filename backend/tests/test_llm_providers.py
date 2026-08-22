@@ -188,12 +188,12 @@ def test_gemini_client_http_error_raises_runtime_error(monkeypatch):
 
     client = GeminiClient(api_key="k", base_url="https://fake.example/v1", model="m")
     monkeypatch.setattr(client, "_http", _mock_transport(handler))
-    with pytest.raises(RuntimeError, match="Gemini request failed \\(400\\)"):
+    with pytest.raises(RuntimeError, match="LLM provider request failed \\(400\\)"):
         client.messages.create(max_tokens=8, messages=[{"role": "user", "content": "hi"}])
 
 
 def test_gemini_client_requires_key():
-    with pytest.raises(RuntimeError, match="GEMINI_API_KEY"):
+    with pytest.raises(RuntimeError, match="No API key configured"):
         GeminiClient(api_key="", base_url="https://x/v1", model="m")
 
 
@@ -223,6 +223,49 @@ def test_build_llm_client_unknown_provider(monkeypatch):
             build_llm_client()
     finally:
         get_settings.cache_clear()
+
+
+def test_build_llm_client_openrouter_uses_compat_client(monkeypatch):
+    from app.config import get_settings
+
+    monkeypatch.setenv("LLM_PROVIDER", "openrouter")
+    monkeypatch.setenv("OPENROUTER_API_KEY", "sk-or-test")
+    monkeypatch.setenv("OPENROUTER_MODEL", "anthropic/claude-sonnet-4.5")
+    get_settings.cache_clear()
+    try:
+        client = build_llm_client()
+        assert isinstance(client, GeminiClient)  # OpenAICompatClient alias
+        assert client.model == "anthropic/claude-sonnet-4.5"
+        assert client._url == "https://openrouter.ai/api/v1/chat/completions"
+        assert client._headers["Authorization"] == "Bearer sk-or-test"
+        assert "X-Title" in client._headers
+    finally:
+        get_settings.cache_clear()
+
+
+def test_openrouter_round_trip_over_mock_transport(monkeypatch):
+    seen: dict = {}
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        seen["url"] = str(request.url)
+        body = json.loads(request.content.decode())
+        seen.update(body)
+        return httpx.Response(200, json={
+            "choices": [{"finish_reason": "stop",
+                         "message": {"content": "Your fee is $75 flat per your agreement."}}],
+        })
+
+    client = GeminiClient(api_key="sk-or-test", base_url="https://openrouter.ai/api/v1",
+                          model="google/gemini-2.5-flash")
+    monkeypatch.setattr(client, "_http", _mock_transport(handler))
+    response = client.messages.create(
+        model=None, max_tokens=64, system="s", tools=None,
+        messages=[{"role": "user", "content": "cancellation fee?"}],
+    )
+    assert seen["url"] == "https://openrouter.ai/api/v1/chat/completions"
+    assert seen["model"] == "google/gemini-2.5-flash"
+    assert response.stop_reason == "end_turn"
+    assert "$75" in response.content[0]["text"]
 
 
 def test_scripted_llm_still_satisfies_orchestrator_contract():

@@ -69,9 +69,11 @@ class AgentOrchestrator:
         self.llm = llm_client
         self.settings = get_settings()
         provider = (self.settings.llm_provider or "anthropic").lower()
-        self.model = (
-            self.settings.gemini_model if provider == "gemini" else self.settings.anthropic_model
-        )
+        self.model = self.settings.anthropic_model
+        if provider == "gemini":
+            self.model = self.settings.gemini_model
+        elif provider == "openrouter":
+            self.model = self.settings.openrouter_model
 
     def run_turn(self, caller: Caller, history: list[dict[str, str]], user_message: str) -> TurnResult:
         result = TurnResult(reply="")

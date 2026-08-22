@@ -246,7 +246,6 @@ a {
   border-radius: 50%;
   filter: blur(70px);
   opacity: 0.5;
-  animation: floaty 16s ease-in-out infinite alternate;
 }
 
 .orb-a {
@@ -263,7 +262,6 @@ a {
   bottom: -120px;
   right: -100px;
   background: radial-gradient(circle at 60% 40%, rgba(155, 109, 255, 0.5), transparent 65%);
-  animation-delay: -6s;
 }
 
 .orb-c {
@@ -272,19 +270,9 @@ a {
   bottom: 10%;
   left: 12%;
   background: radial-gradient(circle at 50% 50%, rgba(52, 211, 153, 0.28), transparent 60%);
-  animation-delay: -11s;
 }
 
-@keyframes floaty {
-  from {
-    transform: translate3d(0, 0, 0) scale(1);
-  }
-  to {
-    transform: translate3d(40px, -34px, 0) scale(1.12);
-  }
-}
-
-/* dashed delivery route with travelling dots */
+/* dashed delivery route (static) */
 .route {
   position: absolute;
   left: 50%;
@@ -296,39 +284,6 @@ a {
   background-size: 18px 2px;
   border-radius: 2px;
 }
-
-.route-dot {
-  position: absolute;
-  top: -4px;
-  width: 10px;
-  height: 10px;
-  border-radius: 50%;
-  background: var(--accent);
-  box-shadow: 0 0 14px var(--accent);
-  animation: travel 7s linear infinite;
-}
-
-.route-dot.d2 {
-  background: var(--accent-2);
-  box-shadow: 0 0 14px var(--accent-2);
-  animation-delay: -2.3s;
-}
-
-.route-dot.d3 {
-  background: var(--green);
-  box-shadow: 0 0 14px var(--green);
-  animation-delay: -4.6s;
-}
-
-@keyframes travel {
-  from {
-    left: -3%;
-  }
-  to {
-    left: 103%;
-  }
-}
-
 .login-card {
   position: relative;
   z-index: 1;
@@ -343,29 +298,6 @@ a {
     inset 0 1px 0 rgba(255, 255, 255, 0.09);
   overflow: hidden;
   animation: rise 0.5s ease both;
-}
-
-/* rotating conic aura behind the card */
-.login-card::before {
-  content: "";
-  position: absolute;
-  inset: -60%;
-  z-index: -1;
-  background: conic-gradient(
-    from 0deg,
-    transparent 0deg,
-    rgba(109, 139, 255, 0.22) 60deg,
-    transparent 130deg,
-    rgba(155, 109, 255, 0.2) 220deg,
-    transparent 300deg
-  );
-  animation: spin-aura 14s linear infinite;
-}
-
-@keyframes spin-aura {
-  to {
-    transform: rotate(1turn);
-  }
 }
 
 .wordmark {
@@ -384,17 +316,7 @@ a {
   -webkit-background-clip: text;
   background-clip: text;
   color: transparent;
-  animation: gradient-drift 6s ease-in-out infinite alternate;
   filter: drop-shadow(0 0 18px rgba(139, 124, 255, 0.35));
-}
-
-@keyframes gradient-drift {
-  from {
-    background-position: 0% 50%;
-  }
-  to {
-    background-position: 100% 50%;
-  }
 }
 
 .gate-tagline {
@@ -488,25 +410,9 @@ a {
     filter 0.16s ease;
 }
 
-.enter-btn::after {
-  content: "";
-  position: absolute;
-  top: 0;
-  bottom: 0;
-  left: -70%;
-  width: 45%;
-  background: linear-gradient(105deg, transparent, rgba(255, 255, 255, 0.35), transparent);
-  transform: skewX(-18deg);
-  transition: left 0.55s ease;
-}
-
 .enter-btn:hover:not(:disabled) {
   transform: translateY(-1px);
   filter: brightness(1.1);
-}
-
-.enter-btn:hover:not(:disabled)::after {
-  left: 125%;
 }
 
 .enter-btn:disabled {

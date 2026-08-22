@@ -71,11 +71,7 @@ export default function LoginScreen({
       <div className="orb orb-a" />
       <div className="orb orb-b" />
       <div className="orb orb-c" />
-      <div className="route">
-        <span className="route-dot" />
-        <span className="route-dot d2" />
-        <span className="route-dot d3" />
-      </div>
+      <div className="route" />
 
       <main className="login-card">
         <h1 className="wordmark">

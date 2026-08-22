@@ -204,8 +204,8 @@ def build_cases() -> list[EvalCase]:
         EvalCase(
             id="swiftmed-late-pickup-eligible",
             persona="staff-agent",
-            question=("Does SwiftMed Supplies' order ORD-1003 qualify for a late "
-                      "pickup credit, and how much?"),
+            question=("Does SwiftMed Supplies' order ORD-1003 (account ACC-005) "
+                      "qualify for a late pickup credit, and how much?"),
             category="clean",
             offline_plan=[
                 ("data_lookup", {"lookup_type": "late_pickup_credit", "order_id": "ORD-1003"}),
@@ -434,10 +434,22 @@ def run_live(conn: sqlite3.Connection, verbose: bool = True) -> tuple[int, int]:
 
     cases = build_cases()
     passed = failed = 0
-    for case in cases:
+    import time as _time
+
+    for index, case in enumerate(cases):
         caller = _caller_for(case.persona)
         history: list[dict[str, str]] = []
-        turn = AgentOrchestrator(conn, llm).run_turn(caller, history, case.question)
+        try:
+            turn = AgentOrchestrator(conn, llm).run_turn(caller, history, case.question)
+        except RuntimeError as exc:
+            failed += 1
+            if verbose:
+                print(f"FAIL [{case.category}] {case.id}")
+                print(f"     - provider error: {str(exc)[:160]}")
+            continue
+        finally:
+            if index < len(cases) - 1:
+                _time.sleep(4)  # stay under free-tier requests-per-minute
 
         errors: list[str] = []
         tools_used = {t["tool"] for t in turn.tools_used}

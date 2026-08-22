@@ -22,8 +22,12 @@ class Settings(BaseSettings):
     environment: str = "development"
 
     # LLM
+    llm_provider: str = "anthropic"  # 'anthropic' | 'gemini'
     anthropic_api_key: str = ""
     anthropic_model: str = "claude-sonnet-4-5"
+    gemini_api_key: str = ""
+    gemini_model: str = "gemini-2.5-flash"
+    gemini_base_url: str = "https://generativelanguage.googleapis.com/v1beta/openai"
 
     # Data locations
     data_pack_dir: str = "./data_pack"

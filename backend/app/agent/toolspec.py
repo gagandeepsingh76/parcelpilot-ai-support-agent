@@ -161,7 +161,16 @@ def execute_tool_call(
             return result, meta
 
         if name == "data_lookup":
-            return _data_lookup(conn, caller, payload), meta
+            result = _data_lookup(conn, caller, payload)
+            if isinstance(result, dict) and result.get("requires_manual_review"):
+                # governing terms demand human judgment - surface it structurally,
+                # not just as text the model may or may not relay
+                result.setdefault(
+                    "escalation_hint",
+                    "manual review required under the governing terms - offer to escalate",
+                )
+                meta["escalated"] = True
+            return result, meta
 
         if name == "stage_action":
             from app.access import scoped_stage_action

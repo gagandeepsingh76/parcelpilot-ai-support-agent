@@ -16,11 +16,31 @@ from dataclasses import dataclass, field
 from typing import Any, Iterable
 
 from app.access import Caller
+from app.agent.llm_providers import build_llm_client
 from app.agent.prompts import system_prompt_for
 from app.agent.toolspec import TOOL_SCHEMAS, execute_tool_call
 from app.config import get_settings
 
 MAX_TOOL_ROUNDS = 6
+
+
+def _content_blocks_to_dicts(content) -> list[dict[str, Any]]:
+    """SDK objects or plain dicts -> uniform dict blocks."""
+    blocks = []
+    for block in content:
+        if isinstance(block, dict):
+            blocks.append(block)
+            continue
+        block_type = getattr(block, "type", None)
+        if block_type == "text":
+            blocks.append({"type": "text", "text": block.text})
+        elif block_type == "tool_use":
+            blocks.append(
+                {"type": "tool_use", "id": block.id, "name": block.name, "input": block.input}
+            )
+        else:
+            blocks.append({"type": str(block_type), "raw": repr(block)[:200]})
+    return blocks
 
 
 @dataclass
@@ -43,41 +63,15 @@ class TurnResult:
         }
 
 
-def build_llm_client():
-    """Real Anthropic client; raises a friendly error if no API key."""
-    settings = get_settings()
-    if not settings.anthropic_api_key or settings.anthropic_api_key.startswith("sk-ant-your-key"):
-        raise RuntimeError(
-            "ANTHROPIC_API_KEY is not configured - set it in backend/.env to use live chat"
-        )
-    from anthropic import Anthropic
-
-    return Anthropic(api_key=settings.anthropic_api_key)
-
-
-def _content_blocks_to_dicts(content) -> list[dict[str, Any]]:
-    blocks = []
-    for block in content:
-        if isinstance(block, dict):
-            blocks.append(block)
-            continue
-        block_type = getattr(block, "type", None)
-        if block_type == "text":
-            blocks.append({"type": "text", "text": block.text})
-        elif block_type == "tool_use":
-            blocks.append(
-                {"type": "tool_use", "id": block.id, "name": block.name, "input": block.input}
-            )
-        else:
-            blocks.append({"type": str(block_type), "raw": repr(block)[:200]})
-    return blocks
-
-
 class AgentOrchestrator:
     def __init__(self, conn: sqlite3.Connection, llm_client: Any):
         self.conn = conn
         self.llm = llm_client
         self.settings = get_settings()
+        provider = (self.settings.llm_provider or "anthropic").lower()
+        self.model = (
+            self.settings.gemini_model if provider == "gemini" else self.settings.anthropic_model
+        )
 
     def run_turn(self, caller: Caller, history: list[dict[str, str]], user_message: str) -> TurnResult:
         result = TurnResult(reply="")
@@ -89,7 +83,7 @@ class AgentOrchestrator:
 
         for _round in range(MAX_TOOL_ROUNDS):
             response = self.llm.messages.create(
-                model=self.settings.anthropic_model,
+                model=self.model,
                 max_tokens=1400,
                 system=system,
                 tools=TOOL_SCHEMAS,

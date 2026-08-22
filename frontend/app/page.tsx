@@ -6,26 +6,12 @@ import {
   ChatTurn,
   MOCK_SESSIONS,
   UiMessage,
-  CallerInfo,
-  credentialLogin,
   decideAction,
-  login,
   sendChat,
 } from "../lib/api";
+import LoginScreen, { AppSession } from "../components/LoginScreen";
 
 type Receipt = Record<string, unknown> | null;
-
-const ACCOUNT_TO_KEY: Record<string, string> = {
-  "ACC-001": "cust-northstar",
-  "ACC-002": "cust-lumenworks",
-  "ACC-003": "cust-brightcart",
-};
-const ROLE_TO_KEY: Record<string, string> = {
-  support_agent: "staff-agent",
-  ops: "staff-ops",
-  admin: "staff-admin",
-  viewer: "staff-viewer",
-};
 
 const TOOL_LABELS: Record<string, string> = {
   data_lookup: "record lookup",
@@ -46,70 +32,61 @@ const STAFF_SUGGESTIONS = [
 ];
 
 export default function ChatPage() {
-  const [token, setToken] = useState<string>("");
-  const [sessionKey, setSessionKey] = useState<string>(MOCK_SESSIONS[0].key);
+  const [session, setSession] = useState<AppSession | null>(null);
+  const [booted, setBooted] = useState(false);
   const [messages, setMessages] = useState<UiMessage[]>([]);
   const [input, setInput] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [receipts, setReceipts] = useState<Record<string, Receipt>>({});
-  const [callerName, setCallerName] = useState("");
-  const [kind, setKind] = useState("");
-  const [authUser, setAuthUser] = useState("");
-  const [authPass, setAuthPass] = useState("");
-  const [authBusy, setAuthBusy] = useState(false);
-  const [authError, setAuthError] = useState<string | null>(null);
   const listRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
-    const saved = window.localStorage.getItem("pp_token");
-    const savedSession = window.localStorage.getItem("pp_session");
-    if (saved && savedSession) {
-      setToken(saved);
-      setSessionKey(savedSession);
+    try {
+      const token = sessionStorage.getItem("pp_token");
+      if (token) {
+        setSession({
+          token,
+          callerName: sessionStorage.getItem("pp_user") || "",
+          kind: sessionStorage.getItem("pp_kind") || "customer",
+          sessionKey: sessionStorage.getItem("pp_session") || "cust-northstar",
+        });
+      }
+    } finally {
+      setBooted(true);
     }
-    setCallerName(window.localStorage.getItem("pp_user") || "");
-    setKind(window.localStorage.getItem("pp_kind") || "");
   }, []);
 
   useEffect(() => {
     listRef.current?.scrollTo({ top: listRef.current.scrollHeight });
   }, [messages, receipts]);
 
-  const signIn = useCallback(async () => {
-    if (!authUser.trim() || !authPass || authBusy) return;
-    setAuthBusy(true);
-    setAuthError(null);
-    try {
-      const { token, caller } = await credentialLogin(authUser.trim(), authPass);
-      const mapped =
-        caller.kind === "customer"
-          ? ACCOUNT_TO_KEY[caller.account_id ?? ""]
-          : ROLE_TO_KEY[caller.role ?? ""];
-      const key = mapped ?? sessionKey;
-      setToken(token);
-      setSessionKey(key);
-      setCallerName(caller.display_name);
-      setError(null);
-      setMessages([]);
-      setReceipts({});
-      window.localStorage.setItem("pp_token", token);
-      window.localStorage.setItem("pp_session", key);
-      window.localStorage.setItem("pp_user", caller.display_name);
-      window.localStorage.setItem("pp_kind", caller.kind);
-      setKind(caller.kind);
-      setAuthPass("");
-    } catch (e) {
-      setAuthError(e instanceof Error ? e.message : String(e));
-    } finally {
-      setAuthBusy(false);
-    }
-  }, [authUser, authPass, authBusy, sessionKey]);
+  const onSignedIn = useCallback((s: AppSession) => {
+    sessionStorage.setItem("pp_token", s.token);
+    sessionStorage.setItem("pp_user", s.callerName);
+    sessionStorage.setItem("pp_kind", s.kind);
+    sessionStorage.setItem("pp_session", s.sessionKey);
+    setSession(s);
+    setMessages([]);
+    setReceipts({});
+    setError(null);
+  }, []);
+
+  const signOut = useCallback(() => {
+    ["pp_token", "pp_user", "pp_kind", "pp_session"].forEach((k) =>
+      sessionStorage.removeItem(k)
+    );
+    setSession(null);
+    setMessages([]);
+    setReceipts({});
+    setInput("");
+    setError(null);
+  }, []);
 
   const submit = useCallback(
     async (raw?: string) => {
       const text = (raw ?? input).trim();
-      if (!text || !token || busy) return;
+      if (!text || !session || busy) return;
       const userMsg: UiMessage = { role: "user", content: text };
       const history = messages.map((m) => ({ role: m.role, content: m.content }));
       setMessages((prev) => [...prev, userMsg]);
@@ -117,7 +94,7 @@ export default function ChatPage() {
       setBusy(true);
       setError(null);
       try {
-        const turn: ChatTurn = await sendChat(token, userMsg.content, history);
+        const turn: ChatTurn = await sendChat(session.token, userMsg.content, history);
         setMessages((prev) => [...prev, { role: "assistant", content: turn.reply, ...turn }]);
       } catch (e) {
         setError(e instanceof Error ? e.message : String(e));
@@ -125,38 +102,29 @@ export default function ChatPage() {
         setBusy(false);
       }
     },
-    [input, token, busy, messages]
+    [input, session, busy, messages]
   );
-
-  const signOut = useCallback(() => {
-    window.localStorage.removeItem("pp_token");
-    window.localStorage.removeItem("pp_session");
-    window.localStorage.removeItem("pp_user");
-    window.localStorage.removeItem("pp_kind");
-    setToken("");
-    setCallerName("");
-    setKind("");
-    setMessages([]);
-    setReceipts({});
-    setInput("");
-    setError(null);
-  }, []);
 
   const actOnPending = useCallback(
     async (pendingId: string, decision: "confirm" | "cancel") => {
+      if (!session) return;
       try {
-        const receipt = await decideAction(token, pendingId, decision);
+        const receipt = await decideAction(session.token, pendingId, decision);
         setReceipts((prev) => ({ ...prev, [pendingId]: receipt }));
         setError(null);
       } catch (e) {
         setError(e instanceof Error ? e.message : String(e));
       }
     },
-    [token]
+    [session]
   );
 
-  const isStaff = kind ? kind === "internal" : sessionKey.startsWith("staff");
-  const activeSession = MOCK_SESSIONS.find((s) => s.key === sessionKey);
+  if (!booted) return null;
+  if (!session)
+    return <LoginScreen existing={null} onSignedIn={onSignedIn} />;
+
+  const isStaff = session.kind === "internal";
+  const activeSession = MOCK_SESSIONS.find((s) => s.key === session.sessionKey);
   const suggestions = isStaff ? STAFF_SUGGESTIONS : CUSTOMER_SUGGESTIONS;
 
   return (
@@ -181,10 +149,10 @@ export default function ChatPage() {
           <div className={`identity-card ${isStaff ? "staff" : ""}`}>
             <span className="session-dot" />
             <div>
-              <div className="who">{callerName || sessionKey}</div>
-              <div className="what">
-                {isStaff ? "Internal staff" : "Customer portal"}
+              <div className="who">
+                {session.callerName || activeSession?.label || session.sessionKey}
               </div>
+              <div className="what">{isStaff ? "Internal staff" : "Customer portal"}</div>
             </div>
           </div>
           <p className="switch-hint">Use Sign out to switch identity.</p>
@@ -196,244 +164,181 @@ export default function ChatPage() {
       </aside>
 
       <main className="main">
-        {!token ? (
-          <div className="hero">
-            <div className="script">
-              Parcel<span>Pilot</span>
+        <>
+          <header className="chatbar">
+            <div>
+              <div className="chat-title">
+                {session.callerName || activeSession?.label}
+              </div>
+              <div className="chat-sub">
+                {isStaff
+                  ? "Cross-account tools with scope limits"
+                  : "You can only see your own records"}
+              </div>
             </div>
-            <p className="sub">
-              A B2B logistics support agent that answers from signed agreements,
-              cites every source, and never applies a change without explicit
-              confirmation.
-            </p>
-            <div className="feature-row">
-              <span className="feature-pill">Cited answers only</span>
-              <span className="feature-pill">Confirmation-gated actions</span>
-              <span className="feature-pill">Role-scoped access</span>
-              <span className="feature-pill">Internal insights</span>
+            <span className={`pill ${isStaff ? "internal" : "customer"}`}>
+              {isStaff ? "INTERNAL" : "CUSTOMER"}
+            </span>
+            <button className="ghost-btn" onClick={signOut}>
+              Sign out
+            </button>
+          </header>
+
+          <div className="thread-wrap">
+            <div className="messages" ref={listRef}>
+              <div className="thread">
+                {messages.length === 0 && (
+                  <div className="empty-state">
+                    <div className="script">How can we help?</div>
+                    <p>
+                      Ask about orders, contract terms, service credits or SLAs -
+                      every answer comes with citations.
+                    </p>
+                    <div className="suggestions">
+                      {suggestions.map((s) => (
+                        <button key={s} className="suggestion-chip" onClick={() => submit(s)}>
+                          {s}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {messages.map((m, i) => (
+                  <div key={i} className="msg">
+                    <div className={m.role === "user" ? "bubble-user" : "bubble-assistant"}>
+                      {m.content}
+
+                      {"tools_used" in m && m.tools_used && m.tools_used.length > 0 && (
+                        <div className="meta-row">
+                          {m.tools_used.map((t, j) => (
+                            <span key={j} className="badge tool" title={JSON.stringify(t.input)}>
+                              {TOOL_LABELS[t.tool] ?? t.tool}
+                            </span>
+                          ))}
+                        </div>
+                      )}
+
+                      {m.escalated && (
+                        <div className="escalation-banner">
+                          Escalated to a human agent - this needs manual review.
+                        </div>
+                      )}
+
+                      {m.conflicts && m.conflicts.length > 0 && (
+                        <div className="conflict-banner">
+                          <strong>Sources differ.</strong>{" "}
+                          {m.conflicts.map((c, i) => (
+                            <span key={i}>
+                              {c.kind === "agreement_vs_general_policy"
+                                ? "The customer's signed agreement governs over general policy. "
+                                : c.kind === "current_vs_deprecated"
+                                  ? "CURRENT documents supersede DEPRECATED ones. "
+                                  : `${c.governs}. `}
+                            </span>
+                          ))}
+                          Both positions are shown in the sources below.
+                        </div>
+                      )}
+
+                      {m.pending_actions?.map((pa) => {
+                        const receipt = receipts[pa.pending_action_id];
+                        return (
+                          <div key={pa.pending_action_id} className="pending-card">
+                            <div className="pc-head">
+                              Pending action
+                              <span className="pc-id">{pa.pending_action_id}</span>
+                            </div>
+                            <div className="pc-summary">{pa.summary}</div>
+                            {!receipt ? (
+                              <div className="actions">
+                                <button
+                                  className="confirm"
+                                  onClick={() => actOnPending(pa.pending_action_id, "confirm")}
+                                >
+                                  Confirm &amp; apply
+                                </button>
+                                <button
+                                  className="cancel"
+                                  onClick={() => actOnPending(pa.pending_action_id, "cancel")}
+                                >
+                                  Cancel
+                                </button>
+                              </div>
+                            ) : (
+                              <div className="receipt">
+                                Applied:{" "}
+                                {JSON.stringify(receipt.created ?? receipt.updated ?? receipt).slice(0, 160)}
+                              </div>
+                            )}
+                          </div>
+                        );
+                      })}
+
+                      {m.citations && m.citations.length > 0 && (
+                        <div className="citations">
+                          <div className="cite-label">Sources</div>
+                          <ul>
+                            {m.citations.map((c, j) => (
+                              <li key={j}>
+                                <span className={`doc-chip ${c.status === "DEPRECATED" ? "deprecated" : ""}`}>
+                                  [{c.doc_id}]
+                                </span>
+                                <span>
+                                  {c.title} — {c.section}{" "}
+                                  <span className="mono">
+                                    ({c.doc_type}, {c.customer_scope})
+                                  </span>
+                                </span>
+                                {c.status === "DEPRECATED" && (
+                                  <span className="badge warn">DEPRECATED - superseded</span>
+                                )}
+                              </li>
+                            ))}
+                          </ul>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                ))}
+
+                {busy && (
+                  <div className="msg">
+                    <div className="bubble-assistant" style={{ maxWidth: 90 }}>
+                      <span className="typing">
+                        <i />
+                        <i />
+                        <i />
+                      </span>
+                    </div>
+                  </div>
+                )}
+
+                {error && <div className="error-box">{error}</div>}
+              </div>
             </div>
 
-            <div className="signin-card">
-              <div className="signin-title">Sign in</div>
-              <div className="signin-row">
+            <div className="composer">
+              <div className="composer-inner">
                 <input
                   type="text"
-                  placeholder="username"
-                  value={authUser}
-                  autoComplete="username"
-                  onChange={(e) => setAuthUser(e.target.value)}
-                  onKeyDown={(e) => e.key === "Enter" && signIn()}
+                  placeholder="Ask about orders, policies, credits…"
+                  value={input}
+                  disabled={!session || busy}
+                  onChange={(e) => setInput(e.target.value)}
+                  onKeyDown={(e) => e.key === "Enter" && submit()}
                 />
-                <input
-                  type="password"
-                  placeholder="password"
-                  value={authPass}
-                  autoComplete="current-password"
-                  onChange={(e) => setAuthPass(e.target.value)}
-                  onKeyDown={(e) => e.key === "Enter" && signIn()}
-                />
-                <button className="send" onClick={signIn} disabled={authBusy || !authUser.trim() || !authPass}>
-                  {authBusy ? "Signing in…" : "Sign in"}
+                <button
+                  className="send"
+                  onClick={() => submit()}
+                  disabled={!session || busy || !input.trim()}
+                >
+                  Send
                 </button>
-              </div>
-              {authError && <div className="error-box" style={{ marginTop: 10 }}>{authError}</div>}
-              <div className="signin-hint">
-                Demo customers: northstar · lumenworks · brightcart (password
-                demo1234) &nbsp;|&nbsp; Staff: agent · ops · viewer (password staff1234)
               </div>
             </div>
           </div>
-        ) : (
-          <>
-            <header className="chatbar">
-              <div>
-                <div className="chat-title">{callerName || activeSession?.label}</div>
-                <div className="chat-sub">
-                  {isStaff
-                    ? "Cross-account tools with scope limits"
-                    : "You can only see your own records"}
-                </div>
-              </div>
-              <span className={`pill ${isStaff ? "internal" : "customer"}`}>
-                {isStaff ? "INTERNAL" : "CUSTOMER"}
-              </span>
-              <button className="ghost-btn" onClick={signOut}>
-                Sign out
-              </button>
-            </header>
-
-            <div className="thread-wrap">
-              <div className="messages" ref={listRef}>
-                <div className="thread">
-                  {messages.length === 0 && (
-                    <div className="empty-state">
-                      <div className="script">How can we help?</div>
-                      <p>
-                        Ask about orders, contract terms, service credits or SLAs -
-                        every answer comes with citations.
-                      </p>
-                      <div className="suggestions">
-                        {suggestions.map((s) => (
-                          <button key={s} className="suggestion-chip" onClick={() => submit(s)}>
-                            {s}
-                          </button>
-                        ))}
-                      </div>
-                    </div>
-                  )}
-
-                  {messages.map((m, i) => (
-                    <div key={i} className="msg">
-                      <div className={m.role === "user" ? "bubble-user" : "bubble-assistant"}>
-                        {m.content}
-
-                        {"tools_used" in m && m.tools_used && m.tools_used.length > 0 && (
-                          <div className="meta-row">
-                            {m.tools_used.map((t, j) => (
-                              <span
-                                key={j}
-                                className="badge tool"
-                                title={JSON.stringify(t.input)}
-                              >
-                                {TOOL_LABELS[t.tool] ?? t.tool}
-                              </span>
-                            ))}
-                          </div>
-                        )}
-
-                        {m.escalated && (
-                          <div className="escalation-banner">
-                            Escalated to a human agent - this needs manual review.
-                          </div>
-                        )}
-
-                        {m.conflicts && m.conflicts.length > 0 && (
-                          <div className="conflict-banner">
-                            <strong>Sources differ.</strong>{" "}
-                            {m.conflicts.map((c, i) => (
-                              <span key={i}>
-                                {c.kind === "agreement_vs_general_policy"
-                                  ? "The customer's signed agreement governs over general policy. "
-                                  : c.kind === "current_vs_deprecated"
-                                    ? "CURRENT documents supersede DEPRECATED ones. "
-                                    : `${c.governs}. `}
-                              </span>
-                            ))}
-                            Both positions are shown in the sources below.
-                          </div>
-                        )}
-
-                        {m.pending_actions?.map((pa) => {
-                          const receipt = receipts[pa.pending_action_id];
-                          return (
-                            <div key={pa.pending_action_id} className="pending-card">
-                              <div className="pc-head">
-                                Pending action
-                                <span className="pc-id">{pa.pending_action_id}</span>
-                              </div>
-                              <div className="pc-summary">{pa.summary}</div>
-                              {!receipt ? (
-                                <div className="actions">
-                                  <button
-                                    className="confirm"
-                                    onClick={() =>
-                                      actOnPending(pa.pending_action_id, "confirm")
-                                    }
-                                  >
-                                    Confirm &amp; apply
-                                  </button>
-                                  <button
-                                    className="cancel"
-                                    onClick={() =>
-                                      actOnPending(pa.pending_action_id, "cancel")
-                                    }
-                                  >
-                                    Cancel
-                                  </button>
-                                </div>
-                              ) : (
-                                <div className="receipt">
-                                  Applied:{" "}
-                                  {JSON.stringify(
-                                    receipt.created ?? receipt.updated ?? receipt
-                                  ).slice(0, 160)}
-                                </div>
-                              )}
-                            </div>
-                          );
-                        })}
-
-                        {m.citations && m.citations.length > 0 && (
-                          <div className="citations">
-                            <div className="cite-label">Sources</div>
-                            <ul>
-                              {m.citations.map((c, j) => (
-                                <li key={j}>
-                                  <span
-                                    className={`doc-chip ${
-                                      c.status === "DEPRECATED" ? "deprecated" : ""
-                                    }`}
-                                  >
-                                    [{c.doc_id}]
-                                  </span>
-                                  <span>
-                                    {c.title} — {c.section}{" "}
-                                    <span className="mono">
-                                      ({c.doc_type}, {c.customer_scope})
-                                    </span>
-                                  </span>
-                                  {c.status === "DEPRECATED" && (
-                                    <span className="badge warn">DEPRECATED - superseded</span>
-                                  )}
-                                </li>
-                              ))}
-                            </ul>
-                          </div>
-                        )}
-                      </div>
-                    </div>
-                  ))}
-
-                  {busy && (
-                    <div className="msg">
-                      <div className="bubble-assistant" style={{ maxWidth: 90 }}>
-                        <span className="typing">
-                          <i />
-                          <i />
-                          <i />
-                        </span>
-                      </div>
-                    </div>
-                  )}
-
-                  {error && <div className="error-box">{error}</div>}
-                </div>
-              </div>
-
-              <div className="composer">
-                <div className="composer-inner">
-                  <input
-                    type="text"
-                    placeholder={
-                      token ? "Ask about orders, policies, credits…" : "Pick a session first"
-                    }
-                    value={input}
-                    disabled={!token || busy}
-                    onChange={(e) => setInput(e.target.value)}
-                    onKeyDown={(e) => e.key === "Enter" && submit()}
-                  />
-                  <button
-                    className="send"
-                    onClick={() => submit()}
-                    disabled={!token || busy || !input.trim()}
-                  >
-                    Send
-                  </button>
-                </div>
-              </div>
-            </div>
-          </>
-        )}
+        </>
       </main>
     </div>
   );

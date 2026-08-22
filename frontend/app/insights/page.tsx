@@ -2,7 +2,9 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { InsightsReport, fetchInsights, fetchMe } from "../../lib/api";
+import LoginScreen, { AppSession, sessionFromTokenData } from "../../components/LoginScreen";
 
 function Card({ title, children }: { title: string; children: React.ReactNode }) {
   return (
@@ -14,38 +16,49 @@ function Card({ title, children }: { title: string; children: React.ReactNode })
 }
 
 export default function InsightsPage() {
-  const [token, setToken] = useState<string>("");
-  const [isStaff, setIsStaff] = useState(false);
+  const router = useRouter();
+  const [session, setSession] = useState<AppSession | null | undefined>(undefined);
   const [report, setReport] = useState<InsightsReport | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    const saved = window.localStorage.getItem("pp_token") || "";
-    setToken(saved);
-    const onStorage = () =>
-      setToken(window.localStorage.getItem("pp_token") || "");
-    window.addEventListener("storage", onStorage);
-    return () => window.removeEventListener("storage", onStorage);
-  }, []);
+    try {
+      const token = sessionStorage.getItem("pp_token");
+      if (!token) {
+        router.replace("/");
+        return;
+      }
+      setSession({
+        token,
+        callerName: sessionStorage.getItem("pp_user") || "",
+        kind: sessionStorage.getItem("pp_kind") || "customer",
+        sessionKey: sessionStorage.getItem("pp_session") || "",
+      });
+    } catch {
+      setSession(null);
+    }
+  }, [router]);
+
+  const isStaff = session?.kind === "internal";
+
+  const onSignedIn = (s: AppSession) => {
+    sessionStorage.setItem("pp_token", s.token);
+    sessionStorage.setItem("pp_user", s.callerName);
+    sessionStorage.setItem("pp_kind", s.kind);
+    sessionStorage.setItem("pp_session", s.sessionKey);
+    setSession(s);
+  };
 
   useEffect(() => {
-    if (!token) {
-      setIsStaff(false);
-      return;
-    }
-    // identity comes from the API so both mock and signed tokens work
-    fetchMe(token)
-      .then((me) => {
-        const staff = me.kind === "internal";
-        setIsStaff(staff);
-        if (staff) {
-          fetchInsights(token)
-            .then(setReport)
-            .catch((e) => setError(String(e)));
-        }
-      })
+    if (!session || !isStaff) return;
+    fetchMe(session.token)
+      .then(() =>
+        fetchInsights(session.token)
+          .then(setReport)
+          .catch((e) => setError(String(e)))
+      )
       .catch((e) => setError(String(e)));
-  }, [token]);
+  }, [session, isStaff]);
 
   const weekDelta =
     report && report.ticket_volume.totals.prev_week > 0
@@ -75,12 +88,9 @@ export default function InsightsPage() {
       </aside>
 
       <main className="main insights-scroll">
-        {!token ? (
-          <div className="center-note">
-            <div className="script">ParcelPilot Insights</div>
-            Log in with an internal session on the chat page first.
-          </div>
-        ) : token && !isStaff && !error ? (
+        {session === undefined ? null : session === null ? (
+          <LoginScreen existing={null} onSignedIn={onSignedIn} />
+        ) : !isStaff && !error ? (
           <div className="center-note">
             <div className="script">Insights are internal</div>
             Switch to a staff session on the chat page to view this dashboard.

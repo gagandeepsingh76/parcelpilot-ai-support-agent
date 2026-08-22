@@ -5,6 +5,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { InsightsReport, fetchInsights, fetchMe } from "../../lib/api";
 import LoginScreen, { AppSession, sessionFromTokenData } from "../../components/LoginScreen";
+import ThemeToggle from "../../components/ThemeToggle";
 
 function Card({ title, children }: { title: string; children: React.ReactNode }) {
   return (
@@ -84,6 +85,9 @@ export default function InsightsPage() {
             Insights
           </Link>
         </nav>
+        <div className="theme-row">
+          <ThemeToggle />
+        </div>
         <footer className="sidefoot">Internal-only. Customer sessions are denied here.</footer>
       </aside>
 

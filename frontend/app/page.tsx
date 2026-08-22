@@ -329,6 +329,7 @@ export default function ChatPage() {
                 <input
                   type="text"
                   placeholder="Ask about orders, policies, credits…"
+                  aria-label="Message"
                   value={input}
                   disabled={!session || busy}
                   onChange={(e) => setInput(e.target.value)}

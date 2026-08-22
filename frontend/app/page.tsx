@@ -10,6 +10,7 @@ import {
   sendChat,
 } from "../lib/api";
 import LoginScreen, { AppSession } from "../components/LoginScreen";
+import ThemeToggle from "../components/ThemeToggle";
 
 type Receipt = Record<string, unknown> | null;
 
@@ -156,6 +157,10 @@ export default function ChatPage() {
             </div>
           </div>
           <p className="switch-hint">Use Sign out to switch identity.</p>
+        </div>
+
+        <div className="theme-row">
+          <ThemeToggle />
         </div>
 
         <footer className="sidefoot">

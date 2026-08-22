@@ -60,6 +60,17 @@ cp ../.env.example .env.local    # set NEXT_PUBLIC_API_BASE_URL=http://localhost
 npm run dev                      # http://localhost:3000
 ```
 
+## Documentation
+
+- [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) - system diagram, layer
+  responsibilities, design decisions with rationale.
+- [`docs/PRODUCT.md`](docs/PRODUCT.md) - product framing, 3-minute demo
+  script, deliberate limitations.
+- [`docs/AI_TOOL_USAGE.md`](docs/AI_TOOL_USAGE.md) - declaration of how AI
+  tools were used and what was verified by hand.
+- [`ASSUMPTIONS.md`](ASSUMPTIONS.md) - running log of assumptions made while
+  building.
+
 ## Environment variables
 
 See `.env.example`. Never commit real secrets.
@@ -89,4 +100,4 @@ See `.env.example`. Never commit real secrets.
 - [x] Step 9 - trust hardening (citations, conflict flags)
 - [x] Step 10 - evaluation suite
 - [x] Step 11 - hosted deployment
-- [ ] Step 12 - architecture/product notes
+- [x] Step 12 - architecture/product notes

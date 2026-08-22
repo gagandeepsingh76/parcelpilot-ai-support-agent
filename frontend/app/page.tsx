@@ -54,6 +54,7 @@ export default function ChatPage() {
   const [error, setError] = useState<string | null>(null);
   const [receipts, setReceipts] = useState<Record<string, Receipt>>({});
   const [callerName, setCallerName] = useState("");
+  const [kind, setKind] = useState("");
   const [authUser, setAuthUser] = useState("");
   const [authPass, setAuthPass] = useState("");
   const [authBusy, setAuthBusy] = useState(false);
@@ -68,6 +69,7 @@ export default function ChatPage() {
       setSessionKey(savedSession);
     }
     setCallerName(window.localStorage.getItem("pp_user") || "");
+    setKind(window.localStorage.getItem("pp_kind") || "");
   }, []);
 
   useEffect(() => {
@@ -87,6 +89,9 @@ export default function ChatPage() {
       setCallerName(
         MOCK_SESSIONS.find((s) => s.key === key)?.label.replace(/^.* - /, "") || ""
       );
+      const k = key.startsWith("staff") ? "internal" : "customer";
+      setKind(k);
+      window.localStorage.setItem("pp_kind", k);
     } catch (e) {
       setError(String(e));
     }
@@ -112,6 +117,8 @@ export default function ChatPage() {
       window.localStorage.setItem("pp_token", token);
       window.localStorage.setItem("pp_session", key);
       window.localStorage.setItem("pp_user", caller.display_name);
+      window.localStorage.setItem("pp_kind", caller.kind);
+      setKind(caller.kind);
       setAuthPass("");
     } catch (e) {
       setAuthError(e instanceof Error ? e.message : String(e));
@@ -146,8 +153,10 @@ export default function ChatPage() {
     window.localStorage.removeItem("pp_token");
     window.localStorage.removeItem("pp_session");
     window.localStorage.removeItem("pp_user");
+    window.localStorage.removeItem("pp_kind");
     setToken("");
     setCallerName("");
+    setKind("");
     setMessages([]);
     setReceipts({});
     setInput("");
@@ -167,7 +176,7 @@ export default function ChatPage() {
     [token]
   );
 
-  const isStaff = sessionKey.startsWith("staff");
+  const isStaff = kind ? kind === "internal" : sessionKey.startsWith("staff");
   const activeSession = MOCK_SESSIONS.find((s) => s.key === sessionKey);
   const customerSessions = MOCK_SESSIONS.filter((s) => !s.key.startsWith("staff"));
   const staffSessions = MOCK_SESSIONS.filter((s) => s.key.startsWith("staff"));

@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
-import { InsightsReport, fetchInsights } from "../../lib/api";
+import { InsightsReport, fetchInsights, fetchMe } from "../../lib/api";
 
 function Card({ title, children }: { title: string; children: React.ReactNode }) {
   return (
@@ -15,24 +15,37 @@ function Card({ title, children }: { title: string; children: React.ReactNode })
 
 export default function InsightsPage() {
   const [token, setToken] = useState<string>("");
+  const [isStaff, setIsStaff] = useState(false);
   const [report, setReport] = useState<InsightsReport | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    setToken(window.localStorage.getItem("pp_token") || "");
-    window.addEventListener("storage", () =>
-      setToken(window.localStorage.getItem("pp_token") || "")
-    );
+    const saved = window.localStorage.getItem("pp_token") || "";
+    setToken(saved);
+    const onStorage = () =>
+      setToken(window.localStorage.getItem("pp_token") || "");
+    window.addEventListener("storage", onStorage);
+    return () => window.removeEventListener("storage", onStorage);
   }, []);
 
   useEffect(() => {
-    if (!token) return;
-    fetchInsights(token)
-      .then(setReport)
+    if (!token) {
+      setIsStaff(false);
+      return;
+    }
+    // identity comes from the API so both mock and signed tokens work
+    fetchMe(token)
+      .then((me) => {
+        const staff = me.kind === "internal";
+        setIsStaff(staff);
+        if (staff) {
+          fetchInsights(token)
+            .then(setReport)
+            .catch((e) => setError(String(e)));
+        }
+      })
       .catch((e) => setError(String(e)));
   }, [token]);
-
-  const isStaff = token.includes("staff");
 
   const weekDelta =
     report && report.ticket_volume.totals.prev_week > 0

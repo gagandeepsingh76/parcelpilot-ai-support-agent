@@ -58,6 +58,15 @@ export async function login(sessionKey: string): Promise<string> {
   return body.token as string;
 }
 
+/** Resolve the caller behind a token (works for mock and signed tokens). */
+export async function fetchMe(token: string): Promise<CallerInfo> {
+  const res = await fetch(`${API_BASE}/api/me`, {
+    headers: { Authorization: `Bearer ${token}` },
+  });
+  if (!res.ok) throw new Error(`me failed (${res.status})`);
+  return res.json();
+}
+
 /** Username/password sign-in for both customer and staff accounts. */
 export async function credentialLogin(
   username: string,

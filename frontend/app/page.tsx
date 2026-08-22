@@ -1,7 +1,6 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import Link from "next/link";
 import {
   ChatTurn,
   MOCK_SESSIONS,
@@ -10,27 +9,30 @@ import {
   sendChat,
 } from "../lib/api";
 import LoginScreen, { AppSession } from "../components/LoginScreen";
-import ThemeToggle from "../components/ThemeToggle";
 import Markdown from "../components/Markdown";
+import AppShell from "../components/AppShell";
+import ToolActivityTimeline from "../components/chat/ToolActivityTimeline";
+import SourceEvidenceCard from "../components/chat/SourceEvidenceCard";
+import ConflictBanner from "../components/chat/ConflictBanner";
+import ActionConfirmationCard from "../components/chat/ActionConfirmationCard";
+import EscalationNotice from "../components/chat/EscalationNotice";
 
-type Receipt = Record<string, unknown> | null;
-
-const TOOL_LABELS: Record<string, string> = {
-  data_lookup: "record lookup",
-  search_documents: "policy search",
-  stage_action: "action staged",
-};
+type Receipt = Record<string, any> | null;
 
 const CUSTOMER_SUGGESTIONS = [
-  "Our order ORD-1001 arrived almost ten hours late - what compensation do we get?",
-  "Why was I charged a cancellation fee for ORD-1006?",
-  "What does my agreement say about pickup credits?",
+  "Can I cancel ORD-1001 without paying a cancellation fee?",
+  "Why was our order ORD-1006 charged an $80 cancellation fee?",
+  "Our order ORD-1001 was 10 hours late — what service credit or compensation do we get?",
+  "What does our signed agreement say about late delivery and cancellation rules?",
+  "Can you show me the status of LumenWorks order ORD-1026?",
 ];
 
 const STAFF_SUGGESTIONS = [
-  "Which open tickets have breached their SLA?",
-  "Show me late pickups this week across accounts.",
-  "Issue the pickup credit for order ORD-1003.",
+  "Which open tickets are currently breaching or approaching their SLA deadline?",
+  "Check late pickup service credit eligibility for SwiftMed order ORD-1003.",
+  "Check cancellation fee for Northstar order ORD-1001 vs standard policy.",
+  "Look up past resolved tickets for ACC-001 regarding late pickups.",
+  "Stage a P1 human escalation for order ORD-1001 due to carrier delay.",
 ];
 
 export default function ChatPage() {
@@ -42,6 +44,7 @@ export default function ChatPage() {
   const [error, setError] = useState<string | null>(null);
   const [receipts, setReceipts] = useState<Record<string, Receipt>>({});
   const listRef = useRef<HTMLDivElement>(null);
+  const inputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     try {
@@ -60,8 +63,20 @@ export default function ChatPage() {
   }, []);
 
   useEffect(() => {
-    listRef.current?.scrollTo({ top: listRef.current.scrollHeight });
-  }, [messages, receipts]);
+    listRef.current?.scrollTo({ top: listRef.current.scrollHeight, behavior: "smooth" });
+  }, [messages, receipts, busy]);
+
+  useEffect(() => {
+    if (!booted || !session) return;
+    try {
+      const params = new URLSearchParams(window.location.search);
+      const q = params.get("prompt");
+      if (q) {
+        setInput(q);
+        window.history.replaceState({}, "", "/");
+      }
+    } catch {}
+  }, [booted, session]);
 
   const onSignedIn = useCallback((s: AppSession) => {
     sessionStorage.setItem("pp_token", s.token);
@@ -85,11 +100,18 @@ export default function ChatPage() {
     setError(null);
   }, []);
 
+  const clearChat = useCallback(() => {
+    setMessages([]);
+    setReceipts({});
+    setError(null);
+  }, []);
+
   const submit = useCallback(
     async (raw?: string) => {
       const text = (raw ?? input).trim();
       if (!text || !session || busy) return;
-      const userMsg: UiMessage = { role: "user", content: text };
+      const nowIso = new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+      const userMsg: UiMessage = { role: "user", content: text, timestamp: nowIso };
       const history = messages.map((m) => ({ role: m.role, content: m.content }));
       setMessages((prev) => [...prev, userMsg]);
       setInput("");
@@ -97,7 +119,15 @@ export default function ChatPage() {
       setError(null);
       try {
         const turn: ChatTurn = await sendChat(session.token, userMsg.content, history);
-        setMessages((prev) => [...prev, { role: "assistant", content: turn.reply, ...turn }]);
+        setMessages((prev) => [
+          ...prev,
+          {
+            role: "assistant",
+            content: turn.reply,
+            timestamp: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
+            ...turn,
+          },
+        ]);
       } catch (e) {
         setError(e instanceof Error ? e.message : String(e));
       } finally {
@@ -122,231 +152,213 @@ export default function ChatPage() {
   );
 
   if (!booted) return null;
-  if (!session)
-    return <LoginScreen existing={null} onSignedIn={onSignedIn} />;
+  if (!session) return <LoginScreen existing={null} onSignedIn={onSignedIn} />;
 
   const isStaff = session.kind === "internal";
-  const activeSession = MOCK_SESSIONS.find((s) => s.key === session.sessionKey);
+  const activeSessionSpec = MOCK_SESSIONS.find((s) => s.key === session.sessionKey);
   const suggestions = isStaff ? STAFF_SUGGESTIONS : CUSTOMER_SUGGESTIONS;
 
   return (
-    <div className="shell">
-      <aside className="sidebar">
-        <Link href="/" className="logo">
-          Parcel<span>Pilot</span>
-        </Link>
-        <p className="tagline">AI support, grounded in your contracts.</p>
-
-        <nav className="nav">
-          <Link href="/" className="navlink active">
-            Chat
-          </Link>
-          <Link href="/insights" className="navlink">
-            Insights
-          </Link>
-        </nav>
-
-        <div className="sessions">
-          <h4>Signed in as</h4>
-          <div className={`identity-card ${isStaff ? "staff" : ""}`}>
-            <span className="session-dot" />
-            <div>
-              <div className="who">
-                {session.callerName || activeSession?.label || session.sessionKey}
-              </div>
-              <div className="what">{isStaff ? "Internal staff" : "Customer portal"}</div>
+    <AppShell
+      session={session}
+      onSwitchSession={onSignedIn}
+      onSignOut={signOut}
+    >
+      <main className="chat-main-container">
+        {/* Chat Header */}
+        <header className="chatbar">
+          <div className="chatbar-left">
+            <div className="chatbar-title-wrap">
+              <h2 className="chat-title">
+                {session.callerName || activeSessionSpec?.label || "AI Support Console"}
+              </h2>
+              <span className={`pill-badge ${isStaff ? "staff" : "customer"}`}>
+                {isStaff ? (activeSessionSpec?.badge || "INTERNAL") : (activeSessionSpec?.badge || "CUSTOMER")}
+              </span>
+            </div>
+            <div className="chat-sub">
+              {isStaff
+                ? "Cross-account operational copilot with tiered authority RAG and confirmation gating"
+                : `Account Scoped (${activeSessionSpec?.accountId || "Own Account"}) · Strictly filtered in data layer`}
             </div>
           </div>
-          <p className="switch-hint">Use Sign out to switch identity.</p>
-        </div>
 
-        <div className="theme-row">
-          <ThemeToggle />
-        </div>
-
-        <footer className="sidefoot">
-          Mock auth - access control enforced server-side on every tool call.
-        </footer>
-      </aside>
-
-      <main className="main">
-        <>
-          <header className="chatbar">
-            <div>
-              <div className="chat-title">
-                {session.callerName || activeSession?.label}
-              </div>
-              <div className="chat-sub">
-                {isStaff
-                  ? "Cross-account tools with scope limits"
-                  : "You can only see your own records"}
-              </div>
-            </div>
-            <span className={`pill ${isStaff ? "internal" : "customer"}`}>
-              {isStaff ? "INTERNAL" : "CUSTOMER"}
-            </span>
-            <button className="ghost-btn" onClick={signOut}>
-              Sign out
+          <div className="chatbar-right">
+            <button
+              type="button"
+              className="ghost-btn"
+              onClick={clearChat}
+              title="Clear current conversation"
+            >
+              Clear Conversation
             </button>
-          </header>
+          </div>
+        </header>
 
-          <div className="thread-wrap">
-            <div className="messages" ref={listRef}>
-              <div className="thread">
-                {messages.length === 0 && (
-                  <div className="empty-state">
-                    <div className="script">How can we help?</div>
-                    <p>
-                      Ask about orders, contract terms, service credits or SLAs -
-                      every answer comes with citations.
-                    </p>
-                    <div className="suggestions">
+        {/* Chat Thread */}
+        <div className="thread-wrap">
+          <div className="messages" ref={listRef}>
+            <div className="thread">
+              {/* Empty / Welcome State */}
+              {messages.length === 0 && (
+                <div className="welcome-state-card">
+                  <div className="welcome-icon-glow">✨</div>
+                  <h3 className="welcome-title">
+                    {isStaff
+                      ? `Welcome to ParcelPilot Operations, ${session.callerName || "Specialist"}`
+                      : `Welcome to ${session.callerName || "Customer Support"}`}
+                  </h3>
+                  <p className="welcome-desc">
+                    {isStaff
+                      ? "Investigate customer orders, verify contract overrides, calculate deterministic SLA credits, and stage audited actions."
+                      : "Ask questions about your orders, contract entitlements, cancellation fees, or compensation — all answers are backed by authoritative sources."}
+                  </p>
+
+                  <div className="welcome-security-card">
+                    <span className="sec-icon">🔒</span>
+                    <span>
+                      {isStaff
+                        ? "Active Identity: Internal Operations (RBAC Enforced) · Multi-Account Data Scoping"
+                        : `Active Account: ${activeSessionSpec?.accountId || "Customer"} · Access to other accounts is physically blocked in the data layer.`}
+                    </span>
+                  </div>
+
+                  <div className="suggestions-container">
+                    <div className="suggestions-label">Suggested Inquiries to Test:</div>
+                    <div className="suggestions-grid">
                       {suggestions.map((s) => (
-                        <button key={s} className="suggestion-chip" onClick={() => submit(s)}>
-                          {s}
+                        <button
+                          key={s}
+                          type="button"
+                          className="suggestion-card"
+                          onClick={() => submit(s)}
+                        >
+                          <span className="suggestion-arrow">➔</span>
+                          <span className="suggestion-text">{s}</span>
                         </button>
                       ))}
                     </div>
                   </div>
-                )}
+                </div>
+              )}
 
-                {messages.map((m, i) => (
-                  <div key={i} className="msg">
-                    <div className={m.role === "user" ? "bubble-user" : "bubble-assistant"}>
+              {/* Message List */}
+              {messages.map((m, i) => (
+                <div key={i} className={`msg-wrapper ${m.role === "user" ? "user-msg" : "assistant-msg"}`}>
+                  <div className={m.role === "user" ? "bubble-user" : "bubble-assistant"}>
+                    {m.role === "assistant" && (
+                      <div className="assistant-header-bar">
+                        <div className="assistant-avatar-pill">
+                          <span className="avatar-dot" />
+                          <strong>ParcelPilot Agent</strong>
+                        </div>
+                        {m.timestamp && <span className="msg-timestamp">{m.timestamp}</span>}
+                      </div>
+                    )}
+
+                    {m.role === "user" && m.timestamp && (
+                      <div className="user-msg-time">{m.timestamp}</div>
+                    )}
+
+                    <div className="msg-body">
                       {m.role === "assistant" ? <Markdown text={m.content} /> : m.content}
-
-                      {"tools_used" in m && m.tools_used && m.tools_used.length > 0 && (
-                        <div className="meta-row">
-                          {m.tools_used.map((t, j) => (
-                            <span key={j} className="badge tool" title={JSON.stringify(t.input)}>
-                              {TOOL_LABELS[t.tool] ?? t.tool}
-                            </span>
-                          ))}
-                        </div>
-                      )}
-
-                      {m.escalated && (
-                        <div className="escalation-banner">
-                          Escalated to a human agent - this needs manual review.
-                        </div>
-                      )}
-
-                      {m.conflicts && m.conflicts.length > 0 && (
-                        <div className="conflict-banner">
-                          <strong>Sources differ.</strong>{" "}
-                          {m.conflicts.map((c, i) => (
-                            <span key={i}>
-                              {c.kind === "agreement_vs_general_policy"
-                                ? "The customer's signed agreement governs over general policy. "
-                                : c.kind === "current_vs_deprecated"
-                                  ? "CURRENT documents supersede DEPRECATED ones. "
-                                  : `${c.governs}. `}
-                            </span>
-                          ))}
-                          Both positions are shown in the sources below.
-                        </div>
-                      )}
-
-                      {m.pending_actions?.map((pa) => {
-                        const receipt = receipts[pa.pending_action_id];
-                        return (
-                          <div key={pa.pending_action_id} className="pending-card">
-                            <div className="pc-head">
-                              Pending action
-                              <span className="pc-id">{pa.pending_action_id}</span>
-                            </div>
-                            <div className="pc-summary">{pa.summary}</div>
-                            {!receipt ? (
-                              <div className="actions">
-                                <button
-                                  className="confirm"
-                                  onClick={() => actOnPending(pa.pending_action_id, "confirm")}
-                                >
-                                  Confirm &amp; apply
-                                </button>
-                                <button
-                                  className="cancel"
-                                  onClick={() => actOnPending(pa.pending_action_id, "cancel")}
-                                >
-                                  Cancel
-                                </button>
-                              </div>
-                            ) : (
-                              <div className="receipt">
-                                Applied:{" "}
-                                {JSON.stringify(receipt.created ?? receipt.updated ?? receipt).slice(0, 160)}
-                              </div>
-                            )}
-                          </div>
-                        );
-                      })}
-
-                      {m.citations && m.citations.length > 0 && (
-                        <div className="citations">
-                          <div className="cite-label">Sources</div>
-                          <ul>
-                            {m.citations.map((c, j) => (
-                              <li key={j}>
-                                <span className={`doc-chip ${c.status === "DEPRECATED" ? "deprecated" : ""}`}>
-                                  [{c.doc_id}]
-                                </span>
-                                <span>
-                                  {c.title} — {c.section}{" "}
-                                  <span className="mono">
-                                    ({c.doc_type}, {c.customer_scope})
-                                  </span>
-                                </span>
-                                {c.status === "DEPRECATED" && (
-                                  <span className="badge warn">DEPRECATED - superseded</span>
-                                )}
-                              </li>
-                            ))}
-                          </ul>
-                        </div>
-                      )}
                     </div>
-                  </div>
-                ))}
 
-                {busy && (
-                  <div className="msg">
-                    <div className="bubble-assistant" style={{ maxWidth: 90 }}>
-                      <span className="typing">
-                        <i />
-                        <i />
-                        <i />
-                      </span>
+                    {/* Step-by-Step Tool Activity Timeline */}
+                    {m.tools_used && m.tools_used.length > 0 && (
+                      <ToolActivityTimeline tools={m.tools_used} />
+                    )}
+
+                    {/* Source Authority Conflict Resolution Banner */}
+                    {m.conflicts && m.conflicts.length > 0 && (
+                      <ConflictBanner conflicts={m.conflicts} />
+                    )}
+
+                    {/* Human Escalation Alert Banner */}
+                    {m.escalated && <EscalationNotice />}
+
+                    {/* State-Changing Pending Actions Preview & Confirmation Card */}
+                    {m.pending_actions && m.pending_actions.length > 0 && (
+                      <div className="pending-actions-wrap">
+                        {m.pending_actions.map((pa) => (
+                          <ActionConfirmationCard
+                            key={pa.pending_action_id}
+                            action={pa}
+                            receipt={receipts[pa.pending_action_id]}
+                            onConfirm={(id) => actOnPending(id, "confirm")}
+                            onCancel={(id) => actOnPending(id, "cancel")}
+                          />
+                        ))}
+                      </div>
+                    )}
+
+                    {/* Authoritative Source Citations with Tier Badges */}
+                    {m.citations && m.citations.length > 0 && (
+                      <SourceEvidenceCard citations={m.citations} />
+                    )}
+                  </div>
+                </div>
+              ))}
+
+              {/* Busy / Typing Indicator */}
+              {busy && (
+                <div className="msg-wrapper assistant-msg">
+                  <div className="bubble-assistant typing-bubble">
+                    <div className="typing-header">
+                      <span className="typing-dot" />
+                      <span>Reasoning across policies, agreements &amp; database...</span>
                     </div>
+                    <span className="typing">
+                      <i />
+                      <i />
+                      <i />
+                    </span>
                   </div>
-                )}
+                </div>
+              )}
 
-                {error && <div className="error-box">{error}</div>}
-              </div>
-            </div>
-
-            <div className="composer">
-              <div className="composer-inner">
-                <input
-                  type="text"
-                  placeholder="Ask about orders, policies, credits…"
-                  aria-label="Message"
-                  value={input}
-                  disabled={!session || busy}
-                  onChange={(e) => setInput(e.target.value)}
-                  onKeyDown={(e) => e.key === "Enter" && submit()}
-                />
-                <button
-                  className="send"
-                  onClick={() => submit()}
-                  disabled={!session || busy || !input.trim()}
-                >
-                  Send
-                </button>
-              </div>
+              {/* Error Box */}
+              {error && (
+                <div className="error-box chat-error">
+                  <div className="error-icon">✕</div>
+                  <div className="error-text">
+                    <strong>Request Failed:</strong> {error}
+                  </div>
+                </div>
+              )}
             </div>
           </div>
-        </>
+
+          {/* Composer */}
+          <div className="composer">
+            <div className="composer-inner">
+              <input
+                ref={inputRef}
+                type="text"
+                placeholder={
+                  isStaff
+                    ? "Ask about any account's orders, SLA breaches, credit entitlements, or stage an action..."
+                    : "Ask about your orders, contract terms, cancellation fees, or service credits..."
+                }
+                aria-label="Message to ParcelPilot Agent"
+                value={input}
+                disabled={!session || busy}
+                onChange={(e) => setInput(e.target.value)}
+                onKeyDown={(e) => e.key === "Enter" && submit()}
+              />
+              <button
+                type="button"
+                className="send"
+                onClick={() => submit()}
+                disabled={!session || busy || !input.trim()}
+              >
+                <span>Send</span>
+                <span className="send-arrow">➔</span>
+              </button>
+            </div>
+          </div>
+        </div>
       </main>
-    </div>
+    </AppShell>
   );
 }

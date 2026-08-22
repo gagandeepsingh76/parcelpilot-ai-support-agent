@@ -1,17 +1,68 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { InsightsReport, fetchInsights, fetchMe } from "../../lib/api";
-import LoginScreen, { AppSession, sessionFromTokenData } from "../../components/LoginScreen";
-import ThemeToggle from "../../components/ThemeToggle";
+import { InsightsReport, fetchInsights, login } from "../../lib/api";
+import LoginScreen, { AppSession } from "../../components/LoginScreen";
+import AppShell from "../../components/AppShell";
 
-function Card({ title, children }: { title: string; children: React.ReactNode }) {
+function MetricCard({
+  title,
+  value,
+  subtext,
+  delta,
+  icon,
+  badge,
+}: {
+  title: string;
+  value: string | number;
+  subtext?: string;
+  delta?: { value: number; label: string };
+  icon?: string;
+  badge?: string;
+}) {
   return (
-    <section className="card">
-      <h3>{title}</h3>
-      {children}
+    <div className="metric-card">
+      <div className="metric-card-header">
+        <span className="metric-card-title">{title}</span>
+        {icon && <span className="metric-card-icon">{icon}</span>}
+      </div>
+      <div className="metric-card-value-row">
+        <div className="metric-card-value">{value}</div>
+        {badge && <span className="metric-badge">{badge}</span>}
+      </div>
+      {delta && (
+        <div className={`metric-delta ${delta.value > 0 ? "up" : delta.value < 0 ? "down" : "neutral"}`}>
+          {delta.value > 0 ? "▲ +" : delta.value < 0 ? "▼ " : "● "}
+          {delta.value}% {delta.label}
+        </div>
+      )}
+      {subtext && !delta && <div className="metric-subtext">{subtext}</div>}
+    </div>
+  );
+}
+
+function SectionCard({
+  title,
+  icon,
+  badge,
+  children,
+}: {
+  title: string;
+  icon?: string;
+  badge?: string;
+  children: React.ReactNode;
+}) {
+  return (
+    <section className="dashboard-section-card">
+      <div className="section-card-header">
+        <div className="section-title-wrap">
+          {icon && <span className="section-icon">{icon}</span>}
+          <h3>{title}</h3>
+        </div>
+        {badge && <span className="section-header-badge">{badge}</span>}
+      </div>
+      <div className="section-card-body">{children}</div>
     </section>
   );
 }
@@ -20,13 +71,14 @@ export default function InsightsPage() {
   const router = useRouter();
   const [session, setSession] = useState<AppSession | null | undefined>(undefined);
   const [report, setReport] = useState<InsightsReport | null>(null);
+  const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     try {
       const token = sessionStorage.getItem("pp_token");
       if (!token) {
-        router.replace("/");
+        setSession(null);
         return;
       }
       setSession({
@@ -38,9 +90,23 @@ export default function InsightsPage() {
     } catch {
       setSession(null);
     }
-  }, [router]);
+  }, []);
 
   const isStaff = session?.kind === "internal";
+
+  const loadData = (tok: string) => {
+    setLoading(true);
+    setError(null);
+    fetchInsights(tok)
+      .then(setReport)
+      .catch((e) => setError(e instanceof Error ? e.message : String(e)))
+      .finally(() => setLoading(false));
+  };
+
+  useEffect(() => {
+    if (!session || !isStaff) return;
+    loadData(session.token);
+  }, [session, isStaff]);
 
   const onSignedIn = (s: AppSession) => {
     sessionStorage.setItem("pp_token", s.token);
@@ -50,16 +116,32 @@ export default function InsightsPage() {
     setSession(s);
   };
 
-  useEffect(() => {
-    if (!session || !isStaff) return;
-    fetchMe(session.token)
-      .then(() =>
-        fetchInsights(session.token)
-          .then(setReport)
-          .catch((e) => setError(String(e)))
-      )
-      .catch((e) => setError(String(e)));
-  }, [session, isStaff]);
+  const signOut = () => {
+    ["pp_token", "pp_user", "pp_kind", "pp_session"].forEach((k) =>
+      sessionStorage.removeItem(k)
+    );
+    setSession(null);
+    router.replace("/");
+  };
+
+  const switchToStaff = async () => {
+    try {
+      const token = await login("staff-agent");
+      const s: AppSession = {
+        token,
+        callerName: "Avery (support agent)",
+        kind: "internal",
+        sessionKey: "staff-agent",
+      };
+      onSignedIn(s);
+    } catch (e) {
+      setError(String(e));
+    }
+  };
+
+  const investigateTicket = (ticketId: string) => {
+    router.push(`/?prompt=${encodeURIComponent(`Investigate SLA status and root cause for ticket ${ticketId}`)}`);
+  };
 
   const weekDelta =
     report && report.ticket_volume.totals.prev_week > 0
@@ -70,177 +152,275 @@ export default function InsightsPage() {
         )
       : null;
 
-  return (
-    <div className="shell">
-      <aside className="sidebar">
-        <Link href="/" className="logo">
-          Parcel<span>Pilot</span>
-        </Link>
-        <p className="tagline">Internal operations console.</p>
-        <nav className="nav">
-          <Link href="/" className="navlink">
-            Chat
-          </Link>
-          <Link href="/insights" className="navlink active">
-            Insights
-          </Link>
-        </nav>
-        <div className="theme-row">
-          <ThemeToggle />
-        </div>
-        <footer className="sidefoot">Internal-only. Customer sessions are denied here.</footer>
-      </aside>
+  if (session === undefined) return null;
+  if (session === null) return <LoginScreen existing={null} onSignedIn={onSignedIn} />;
 
-      <main className="main insights-scroll">
-        {session === undefined ? null : session === null ? (
-          <LoginScreen existing={null} onSignedIn={onSignedIn} />
-        ) : !isStaff && !error ? (
-          <div className="center-note">
-            <div className="script">Insights are internal</div>
-            Switch to a staff session on the chat page to view this dashboard.
+  return (
+    <AppShell session={session} onSwitchSession={onSignedIn} onSignOut={signOut}>
+      <main className="insights-main-container">
+        {/* Insights Top Header */}
+        <header className="insights-topbar">
+          <div className="topbar-left">
+            <div className="topbar-title-row">
+              <h2 className="topbar-title">Operations Insights &amp; Anomaly Detection</h2>
+              <span className="pill-badge staff">INTERNAL CONSOLE</span>
+            </div>
+            <p className="topbar-desc">
+              Proactive issue clustering, SLA risk monitoring, and credit exposure grounded in snapshot data.
+            </p>
+          </div>
+
+          <div className="topbar-right">
+            {report && (
+              <span className="snapshot-timestamp-pill">
+                Anchor Time: {report.generated_at.replace("T", " ").slice(0, 16)}Z
+              </span>
+            )}
+            <button
+              type="button"
+              className="refresh-btn"
+              onClick={() => session && isStaff && loadData(session.token)}
+              disabled={loading || !isStaff}
+            >
+              {loading ? "Refreshing..." : "↻ Refresh Metrics"}
+            </button>
+          </div>
+        </header>
+
+        {/* Customer Access Restriction State */}
+        {!isStaff ? (
+          <div className="restricted-notice-card">
+            <div className="restricted-icon">🔒</div>
+            <h3>Operations Insights is an Internal-Only Dashboard</h3>
+            <p>
+              Customer sessions are strictly limited to viewing their own account records to prevent cross-account leakage.
+              To explore SLA risk monitoring and cross-account anomaly detection, switch to an internal staff session.
+            </p>
+            <button type="button" className="switch-staff-btn" onClick={switchToStaff}>
+              ➔ Switch to Internal Support Agent (Avery)
+            </button>
           </div>
         ) : error ? (
-          <div className="insights-inner">
-            <div className="error-box">
-              {error.includes("403")
-                ? "Insights are internal-only. Switch to a staff session on the chat page."
-                : error}
-            </div>
+          <div className="error-box insights-error">
+            <strong>Error loading insights:</strong> {error}
           </div>
         ) : report ? (
-          <div className="insights-inner">
-            <div className="insights-header">
-              <span className="script">Operations Insights</span>
-              <span className="asof">
-                as of {report.generated_at.replace("T", " ").slice(0, 16)}Z
-              </span>
+          <div className="dashboard-content">
+            {/* KPI Metric Overview Row */}
+            <div className="kpi-grid">
+              <MetricCard
+                title="Tickets This Week"
+                value={report.ticket_volume.totals.this_week}
+                delta={weekDelta != null ? { value: weekDelta, label: "vs prior week" } : undefined}
+                icon="🎟️"
+              />
+              <MetricCard
+                title="SLA Breaches / Risks"
+                value={report.sla_watchlist.length}
+                subtext="Open tickets requiring immediate attention"
+                badge={report.sla_watchlist.length > 0 ? "Action Required" : "Healthy"}
+                icon="⏱️"
+              />
+              <MetricCard
+                title="Service Quality Anomalies"
+                value={report.service_quality.late_delivery_count + report.service_quality.late_pickup_count}
+                subtext={`${report.service_quality.late_delivery_count} late deliveries, ${report.service_quality.late_pickup_count} late pickups`}
+                icon="📦"
+              />
+              <MetricCard
+                title="Total Credit Exposure"
+                value={`$${report.credit_exposure.total_claimable_usd.toFixed(0)}`}
+                subtext="Claimable today across customer accounts"
+                icon="💵"
+              />
             </div>
 
-            <div className="kpi-row">
-              <div className="kpi">
-                <div className="kpi-label">Tickets this week</div>
-                <div className="kpi-value">{report.ticket_volume.totals.this_week}</div>
-                {weekDelta != null && (
-                  <div className={`kpi-delta ${weekDelta > 0 ? "up" : "down"}`}>
-                    {weekDelta > 0 ? "+" : ""}
-                    {weekDelta}% vs prior week
+            {/* Main Insight Grid */}
+            <div className="dashboard-sections-grid">
+              {/* SLA Watchlist Section */}
+              <SectionCard
+                title={`SLA Watchlist (${report.sla_watchlist.length} Tickets)`}
+                icon="🚨"
+                badge={report.sla_watchlist.length > 0 ? "Urgent" : "Cleared"}
+              >
+                {report.sla_watchlist.length === 0 ? (
+                  <div className="empty-section-notice">✓ All active tickets are within their contractual SLA window.</div>
+                ) : (
+                  <div className="sla-watchlist-table">
+                    {report.sla_watchlist.map((t) => {
+                      const isOverdue = t.problems.some((p) => p.includes("overdue"));
+                      return (
+                        <div key={t.ticket_id} className={`sla-ticket-row ${isOverdue ? "is-overdue" : "is-near"}`}>
+                          <div className="sla-ticket-top">
+                            <div className="sla-priority-pill" data-priority={t.priority}>
+                              {t.priority}
+                            </div>
+                            <span className="sla-ticket-id">{t.ticket_id}</span>
+                            <span className="sla-account-name">{t.account_name}</span>
+                            <button
+                              type="button"
+                              className="investigate-ticket-btn"
+                              onClick={() => investigateTicket(t.ticket_id)}
+                              title="Ask AI to investigate this ticket"
+                            >
+                              Investigate with AI ➔
+                            </button>
+                          </div>
+                          <div className="sla-ticket-subject">{t.subject || "No subject provided"}</div>
+                          <ul className="sla-problems-list">
+                            {t.problems.map((p, pIdx) => (
+                              <li key={pIdx}>⚠️ {p}</li>
+                            ))}
+                          </ul>
+                        </div>
+                      );
+                    })}
                   </div>
                 )}
-              </div>
-              <div className="kpi">
-                <div className="kpi-label">SLA breaches</div>
-                <div className="kpi-value">{report.sla_watchlist.length}</div>
-                <div className="kpi-delta">open tickets needing attention</div>
-              </div>
-              <div className="kpi">
-                <div className="kpi-label">Late deliveries</div>
-                <div className="kpi-value">{report.service_quality.late_delivery_count}</div>
-                <div className="kpi-delta">
-                  {report.service_quality.window_days}-day window ·{" "}
-                  {report.service_quality.orders_in_flight} in flight
-                </div>
-              </div>
-              <div className="kpi">
-                <div className="kpi-label">Credit exposure</div>
-                <div className="kpi-value">
-                  ${report.credit_exposure.total_claimable_usd.toFixed(0)}
-                </div>
-                <div className="kpi-delta">claimable today across accounts</div>
-              </div>
-            </div>
+              </SectionCard>
 
-            <div className="insights-grid">
-              <Card title="Ticket volume by category (trailing week)">
-                <ul>
-                  {report.ticket_volume.by_category.slice(0, 6).map((c) => (
-                    <li key={c.category}>
-                      {c.category}: <strong>{c.count}</strong>
-                    </li>
-                  ))}
-                </ul>
-                {report.ticket_volume.spikes.map((s) => (
-                  <div key={s.account_id} className="notice-row">
-                    Spike: {s.account_name} ({s.account_id}) — {s.this_week} this week vs{" "}
-                    {s.prev_week} prior ({s.top_categories.map((t) => t.category).join(", ")}).
-                  </div>
-                ))}
-              </Card>
-
-              <Card title={`SLA watchlist (${report.sla_watchlist.length})`}>
-                {report.sla_watchlist.length === 0 && <p>All open tickets within SLA.</p>}
-                {report.sla_watchlist.map((t) => (
-                  <div key={t.ticket_id} className="alert-row">
-                    <strong>
-                      [{t.priority}] {t.ticket_id} — {t.account_name}
-                    </strong>
-                    <div>{t.subject}</div>
-                    <ul>
-                      {t.problems.map((p, i) => (
-                        <li key={i}>{p}</li>
-                      ))}
-                    </ul>
-                  </div>
-                ))}
-              </Card>
-
-              <Card title={`Service quality (${report.service_quality.window_days}-day window)`}>
-                <ul>
-                  {report.service_quality.late_pickups.slice(0, 5).map((o) => (
-                    <li key={o.order_id}>
-                      <span className="mono">{o.order_id}</span>: pickup +{o.delay_minutes} min
-                    </li>
-                  ))}
-                  {report.service_quality.late_deliveries.slice(0, 5).map((o) => (
-                    <li key={o.order_id}>
-                      <span className="mono">{o.order_id}</span>:{" "}
-                      {o.delay_hours != null ? `delivery +${o.delay_hours} h` : o.note}
-                    </li>
-                  ))}
-                </ul>
-              </Card>
-
-              <Card title="Credit exposure (if claimed today)">
-                <ul>
-                  {Object.entries(report.credit_exposure.claimable_now_usd_by_account).map(
-                    ([account, amount]) => (
-                      <li key={account}>
-                        <span className="mono">{account}</span>: ${amount.toFixed(2)}
-                      </li>
-                    )
-                  )}
-                </ul>
-                {report.credit_exposure.manual_review.map((m, i) => (
-                  <div key={i} className="notice-row">
-                    Manual review: {m.kind} on <span className="mono">{m.order_id}</span>
-                  </div>
-                ))}
-                <p className="hint">{report.credit_exposure.basis}</p>
-              </Card>
-
+              {/* Cross-Customer Patterns */}
               {report.cross_customer_patterns.length > 0 && (
-                <Card title="Cross-customer patterns">
-                  <ul>
-                    {report.cross_customer_patterns.map((p) => (
-                      <li key={p.category}>
-                        <strong>{p.category}</strong> at {p.accounts_affected} accounts —{" "}
-                        {p.hint}
-                      </li>
+                <SectionCard
+                  title="Cross-Customer Pattern Detection"
+                  icon="🔍"
+                  badge={`${report.cross_customer_patterns.length} Systemic Clusters`}
+                >
+                  <div className="patterns-list">
+                    {report.cross_customer_patterns.map((p, idx) => (
+                      <div key={idx} className="pattern-item-card">
+                        <div className="pattern-card-head">
+                          <strong className="pattern-category">{p.category}</strong>
+                          <span className="pattern-accounts-pill">{p.accounts_affected} Accounts Affected</span>
+                        </div>
+                        <p className="pattern-hint">{p.hint}</p>
+                        <div className="pattern-keywords-row">
+                          <span className="keywords-label">Keywords:</span>
+                          {p.shared_keywords.map((kw, kIdx) => (
+                            <span key={kIdx} className="keyword-chip">{kw}</span>
+                          ))}
+                        </div>
+                      </div>
                     ))}
-                  </ul>
-                </Card>
+                  </div>
+                </SectionCard>
               )}
+
+              {/* Ticket Volume & Spikes */}
+              <SectionCard title="Ticket Volume & Spikes" icon="📈">
+                <div className="volume-categories-list">
+                  {report.ticket_volume.by_category.slice(0, 6).map((c) => (
+                    <div key={c.category} className="category-volume-row">
+                      <span className="cat-name">{c.category}</span>
+                      <div className="cat-bar-wrap">
+                        <div
+                          className="cat-bar"
+                          style={{
+                            width: `${Math.min(100, Math.max(10, (c.count / (report.ticket_volume.totals.this_week || 1)) * 100))}%`,
+                          }}
+                        />
+                      </div>
+                      <span className="cat-count">{c.count}</span>
+                    </div>
+                  ))}
+                </div>
+
+                {report.ticket_volume.spikes.length > 0 && (
+                  <div className="spikes-notice-area">
+                    <div className="spikes-heading">⚡ Significant Volume Spikes (&gt;2x prior week):</div>
+                    {report.ticket_volume.spikes.map((s) => (
+                      <div key={s.account_id} className="spike-card">
+                        <span className="spike-name"><strong>{s.account_name}</strong> ({s.account_id})</span>
+                        <span className="spike-stat">
+                          {s.this_week} tickets this week vs {s.prev_week} prior
+                        </span>
+                        <span className="spike-top-cat">
+                          Top: {s.top_categories.map((t) => `${t.category} (${t.count})`).join(", ")}
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </SectionCard>
+
+              {/* Service Quality */}
+              <SectionCard title={`Service Quality (${report.service_quality.window_days}-Day Window)`} icon="🚚">
+                <div className="service-quality-summary">
+                  <div><strong>In-Flight Shipments:</strong> {report.service_quality.orders_in_flight}</div>
+                  <div><strong>Late Pickups:</strong> {report.service_quality.late_pickup_count}</div>
+                  <div><strong>Late Deliveries:</strong> {report.service_quality.late_delivery_count}</div>
+                </div>
+
+                <div className="quality-tables-split">
+                  <div className="quality-sublist">
+                    <div className="sublist-heading">Late Pickups (&gt;10 min):</div>
+                    {report.service_quality.late_pickups.length === 0 ? (
+                      <div className="no-items">None recorded in window</div>
+                    ) : (
+                      <ul>
+                        {report.service_quality.late_pickups.slice(0, 5).map((o) => (
+                          <li key={o.order_id}>
+                            <code>{o.order_id}</code>: +{o.delay_minutes} min late pickup
+                          </li>
+                        ))}
+                      </ul>
+                    )}
+                  </div>
+
+                  <div className="quality-sublist">
+                    <div className="sublist-heading">Late Deliveries:</div>
+                    {report.service_quality.late_deliveries.length === 0 ? (
+                      <div className="no-items">None recorded in window</div>
+                    ) : (
+                      <ul>
+                        {report.service_quality.late_deliveries.slice(0, 5).map((o) => (
+                          <li key={o.order_id}>
+                            <code>{o.order_id}</code>: {o.delay_hours != null ? `+${o.delay_hours} hrs` : o.note}
+                          </li>
+                        ))}
+                      </ul>
+                    )}
+                  </div>
+                </div>
+              </SectionCard>
+
+              {/* Credit Exposure & Manual Review */}
+              <SectionCard title="Service Credit Exposure" icon="💰">
+                <div className="exposure-by-account-grid">
+                  {Object.entries(report.credit_exposure.claimable_now_usd_by_account).map(([acc, amt]) => (
+                    <div key={acc} className="exposure-account-chip">
+                      <span className="acc-code">{acc}</span>
+                      <span className="acc-amt">${amt.toFixed(2)}</span>
+                    </div>
+                  ))}
+                </div>
+
+                {report.credit_exposure.manual_review.length > 0 && (
+                  <div className="manual-review-box">
+                    <div className="manual-review-title">⚠️ Flagged for Operations Review (Missing Contract Fields):</div>
+                    {report.credit_exposure.manual_review.map((m, idx) => (
+                      <div key={idx} className="manual-item">
+                        <span><code>{m.order_id}</code>: {m.kind}</span>
+                        <span className="manual-basis">{m.basis}</span>
+                      </div>
+                    ))}
+                  </div>
+                )}
+                <p className="exposure-basis-note">{report.credit_exposure.basis}</p>
+              </SectionCard>
             </div>
           </div>
         ) : (
-          <div className="center-note">
-            <span className="typing" style={{ marginTop: 40 }}>
+          <div className="loading-container">
+            <span className="typing">
               <i />
               <i />
               <i />
             </span>
+            <span>Computing deterministic insights across accounts...</span>
           </div>
         )}
       </main>
-    </div>
+    </AppShell>
   );
 }

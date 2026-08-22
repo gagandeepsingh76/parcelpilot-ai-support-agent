@@ -73,7 +73,7 @@ See `.env.example`. Never commit real secrets.
 - [x] Step 6 - agent orchestration + escalation policy
 - [x] Step 7 - chat UI with tool visibility
 - [x] Step 8 - proactive issue-detection dashboard
-- [ ] Step 9 - trust hardening (citations, conflict flags)
+- [x] Step 9 - trust hardening (citations, conflict flags)
 - [ ] Step 10 - evaluation suite
 - [ ] Step 11 - hosted deployment
 - [ ] Step 12 - architecture/product notes

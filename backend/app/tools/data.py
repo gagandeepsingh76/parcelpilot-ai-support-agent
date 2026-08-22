@@ -73,6 +73,57 @@ def list_tickets_for_account(conn: sqlite3.Connection, account_id: str, limit: i
     return [dict(r) for r in rows]
 
 
+def search_resolved_tickets(
+    conn: sqlite3.Connection,
+    account_id: str,
+    keywords: list[str],
+    limit: int = 5,
+) -> list[dict[str, Any]]:
+    """Similar RESOLVED tickets for an account - CONTEXT ONLY, never authority.
+
+    Deliberately excluded from the RAG index (see Step 2/9); surfaced here so
+    internal staff can reference precedent. Every row is stamped
+    context_only=True / verified=False so the model cannot mistake it for a
+    citable policy source.
+    """
+    if not keywords:
+        return []
+    like_clauses = []
+    params: list[Any] = [account_id]
+    for keyword in keywords[:6]:
+        like_clauses.append(
+            "(subject LIKE ? OR description LIKE ? OR resolution_note LIKE ?)"
+        )
+        escaped = f"%{keyword.strip()}%"
+        params.extend([escaped, escaped, escaped])
+    params.append(limit)
+    rows = conn.execute(
+        f"""
+        SELECT ticket_id, order_id, category, subject, priority, created_at,
+               resolved_at, resolution_note
+        FROM tickets
+        WHERE account_id = ?
+          AND lower(COALESCE(status, '')) IN ('resolved', 'closed')
+          AND ({' OR '.join(like_clauses)})
+        ORDER BY resolved_at DESC LIMIT ?
+        """,
+        params,
+    ).fetchall()
+    return [
+        {
+            **dict(row),
+            "context_only": True,
+            "verified": False,
+            "note": (
+                "similar past ticket - operational context only; NOT an "
+                "authoritative source. Never quote amounts, entitlements or "
+                "terms from it."
+            ),
+        }
+        for row in rows
+    ]
+
+
 def monthly_credits_issued(conn: sqlite3.Connection, account_id: str, month_start: str) -> float:
     """Sum of credits already issued this calendar month from the actions log.
 

@@ -61,7 +61,7 @@ TOOL_SCHEMAS: list[dict[str, Any]] = [
                     "enum": [
                         "order", "orders_for_account", "ticket", "tickets_for_account",
                         "account", "cancellation_fee", "late_pickup_credit",
-                        "late_delivery_credit", "sla_status",
+                        "late_delivery_credit", "sla_status", "similar_past_tickets",
                     ],
                 },
                 "order_id": {"type": "string"},
@@ -69,6 +69,15 @@ TOOL_SCHEMAS: list[dict[str, Any]] = [
                 "account_id": {
                     "type": "string",
                     "description": "Internal staff only: the account to query.",
+                },
+                "keywords": {
+                    "type": "array",
+                    "items": {"type": "string"},
+                    "description": (
+                        "similar_past_tickets only: 1-6 keywords to match against "
+                        "resolved tickets of the given account. Results are "
+                        "context-only and never citable as policy."
+                    ),
                 },
             },
             "required": ["lookup_type"],
@@ -233,5 +242,15 @@ def _data_lookup(
             return ticket
         account = acl.scoped_get_account(conn, caller, ticket["account_id"])
         return calc.sla_status(conn, ticket, account)
+
+    if lookup == "similar_past_tickets":
+        from app.access import scoped_search_past_tickets
+
+        keywords = [str(k) for k in payload.get("keywords") or []]
+        if not keywords:
+            return {"error": "similar_past_tickets requires keywords"}
+        return scoped_search_past_tickets(
+            conn, caller, payload.get("account_id"), keywords
+        )
 
     return {"error": f"unsupported lookup_type '{lookup}'"}

@@ -131,11 +131,19 @@ export default function ChatPage() {
                 {m.escalated && <span className="badge esc">escalated to human</span>}
               </div>
             )}
-            {m.conflicts && m.conflicts.length > 0 && (
+                        {m.conflicts && m.conflicts.length > 0 && (
               <div className="conflict-banner">
-                Note: sources differ -{" "}
-                {m.conflicts.map((c) => c.governs).join("; ")}. Both are shown in the
-                citations.
+                <strong>Sources differ.</strong>{" "}
+                {m.conflicts.map((c, i) => (
+                  <span key={i}>
+                    {c.kind === "agreement_vs_general_policy"
+                      ? "The customer's signed agreement governs over general policy. "
+                      : c.kind === "current_vs_deprecated"
+                        ? "CURRENT documents supersede DEPRECATED ones. "
+                        : `${c.governs}. `}
+                  </span>
+                ))}
+                Both positions are shown in the citations below.
               </div>
             )}
             {m.pending_actions?.map((pa) => {
@@ -166,8 +174,14 @@ export default function ChatPage() {
                 Sources:
                 <ul>
                   {m.citations.map((c, j) => (
-                    <li key={j}>
-                      [{c.doc_id}] {c.title} — {c.section} ({c.status}, {c.customer_scope})
+                    <li key={j} className={c.status === "DEPRECATED" ? "cite-deprecated" : undefined}>
+                      [{c.doc_id}] {c.title} — {c.section}
+                      {c.status === "DEPRECATED" && (
+                        <span className="badge warn" style={{ marginLeft: 6 }}>
+                          DEPRECATED - superseded
+                        </span>
+                      )}{" "}
+                      ({c.doc_type}, {c.customer_scope})
                     </li>
                   ))}
                 </ul>

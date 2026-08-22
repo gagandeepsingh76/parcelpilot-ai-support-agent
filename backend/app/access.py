@@ -140,6 +140,33 @@ def scoped_list_tickets(conn: sqlite3.Connection, caller: Caller, account_id: st
     return list_tickets_for_account(conn, effective)
 
 
+def scoped_search_past_tickets(
+    conn: sqlite3.Connection,
+    caller: Caller,
+    account_id: str | None,
+    keywords: list[str],
+) -> dict[str, Any]:
+    """Historical resolved tickets as CONTEXT ONLY (internal roles, Req P2).
+
+    Historical precedent is never an authoritative source, so this lookup is
+    internal-only and every row arrives pre-stamped unverified.
+    """
+    from app.tools.data import search_resolved_tickets
+
+    require_internal_role(caller)
+    if not account_id:
+        raise AccessDeniedError("similar_past_tickets requires the account_id to search within")
+    matches = search_resolved_tickets(conn, account_id, keywords)
+    return {
+        "records": matches,
+        "usage_rule": (
+            "Context only - these are NOT authoritative sources. Cite policies "
+            "via search_documents instead; never quote amounts or terms from "
+            "past tickets."
+        ),
+    }
+
+
 def assert_can_view_record(caller: Caller, account_id: str) -> None:
     """Record-level guard for calculated results derived from another table."""
     if caller.is_customer and caller.account_id != account_id:

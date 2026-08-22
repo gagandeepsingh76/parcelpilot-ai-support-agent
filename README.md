@@ -71,7 +71,7 @@ See `.env.example`. Never commit real secrets.
 - [x] Step 4 - action tools with confirmation gating
 - [x] Step 5 - access-control layer + cross-account denial tests
 - [x] Step 6 - agent orchestration + escalation policy
-- [ ] Step 7 - chat UI with tool visibility
+- [x] Step 7 - chat UI with tool visibility
 - [ ] Step 8 - proactive issue-detection dashboard
 - [ ] Step 9 - trust hardening (citations, conflict flags)
 - [ ] Step 10 - evaluation suite

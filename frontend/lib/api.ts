@@ -4,21 +4,43 @@ export const API_BASE =
 export interface Citation {
   doc_id: string;
   title: string;
-  section: string;
+  section?: string;
+  heading?: string;
   status: string;
   doc_type: string;
   customer_scope: string;
+  version?: string;
+  filename?: string;
 }
 
 export interface PendingAction {
   pending_action_id: string;
   summary: string;
-  changes?: unknown;
+  changes?: Record<string, any>;
+  affects?: {
+    table?: string;
+    record_id?: string;
+    account_id?: string;
+    linked_order_id?: string;
+    linked_ticket_id?: string;
+    new_record?: boolean;
+  };
+  action_type?: string;
+  created_at?: string;
+  status?: string;
+}
+
+export interface ToolUsed {
+  tool: string;
+  input: Record<string, any>;
+  output?: Record<string, any> | string;
+  status?: "success" | "error";
+  label?: string;
 }
 
 export interface ChatTurn {
   reply: string;
-  tools_used: { tool: string; input: Record<string, unknown> }[];
+  tools_used: ToolUsed[];
   citations: Citation[];
   conflicts: { kind: string; governs: string; sources: Citation[] }[];
   pending_actions: PendingAction[];
@@ -28,15 +50,84 @@ export interface ChatTurn {
 export interface UiMessage extends Partial<ChatTurn> {
   role: "user" | "assistant";
   content: string;
+  timestamp?: string;
 }
 
-const MOCK_SESSIONS = [
-  { key: "cust-northstar", label: "Customer - Northstar Logistics" },
-  { key: "cust-lumenworks", label: "Customer - LumenWorks Ltd" },
-  { key: "cust-brightcart", label: "Customer - BrightCart Commerce" },
-  { key: "staff-agent", label: "Internal - Support agent" },
-  { key: "staff-ops", label: "Internal - Ops" },
-  { key: "staff-viewer", label: "Internal - Viewer (read-only)" },
+export interface MockSessionSpec {
+  key: string;
+  label: string;
+  company: string;
+  kind: "customer" | "internal";
+  role?: string;
+  accountId?: string;
+  description: string;
+  badge: string;
+}
+
+export const MOCK_SESSIONS: MockSessionSpec[] = [
+  {
+    key: "cust-northstar",
+    label: "Customer — Northstar Logistics",
+    company: "Northstar Logistics",
+    kind: "customer",
+    accountId: "ACC-001",
+    description: "Enterprise tier with signed agreement ($75 flat cancellation fee, 4h delivery compensation clause)",
+    badge: "Enterprise (ACC-001)",
+  },
+  {
+    key: "cust-lumenworks",
+    label: "Customer — LumenWorks Ltd",
+    company: "LumenWorks Ltd",
+    kind: "customer",
+    accountId: "ACC-002",
+    description: "Mid-market tier ($50 late pickup credit, cancellation min of $100 / 20%)",
+    badge: "Mid-Market (ACC-002)",
+  },
+  {
+    key: "cust-brightcart",
+    label: "Customer — BrightCart Commerce",
+    company: "BrightCart Commerce",
+    kind: "customer",
+    accountId: "ACC-003",
+    description: "Standard policy tier ($25 pickup credit, standard cancellation rules)",
+    badge: "Standard (ACC-003)",
+  },
+  {
+    key: "staff-agent",
+    label: "Internal — Support Agent (Avery)",
+    company: "ParcelPilot Operations",
+    kind: "internal",
+    role: "support_agent",
+    description: "Can investigate across all accounts, look up past context, and stage escalations/updates",
+    badge: "Support Agent",
+  },
+  {
+    key: "staff-ops",
+    label: "Internal — Operations Manager (Priya)",
+    company: "ParcelPilot Operations",
+    kind: "internal",
+    role: "ops",
+    description: "Full operations monitoring, SLA oversight, proactive issue resolution & action staging",
+    badge: "Ops Manager",
+  },
+  {
+    key: "staff-admin",
+    label: "Internal — Administrator (Root)",
+    company: "ParcelPilot IT",
+    kind: "internal",
+    role: "admin",
+    description: "Full system administration and configuration",
+    badge: "Admin",
+  },
+  {
+    key: "staff-viewer",
+    label: "Internal — Read-Only Viewer (Intern)",
+    company: "ParcelPilot Operations",
+    kind: "internal",
+    role: "viewer",
+    description: "Internal read-only access — cannot stage state-changing actions",
+    badge: "Viewer (Read-Only)",
+  },
 ];
 
 export interface CallerInfo {
@@ -45,6 +136,46 @@ export interface CallerInfo {
   account_id?: string | null;
   role?: string | null;
   session_id: string;
+}
+
+export interface SystemAccount {
+  account_id: string;
+  account_name: string;
+  tier?: string;
+  good_standing: boolean;
+}
+
+export interface KnowledgeDocument {
+  doc_id: string;
+  filename: string;
+  title: string;
+  version?: string;
+  status: "CURRENT" | "DEPRECATED";
+  doc_type: string;
+  customer_scope: string;
+  page_count: number;
+  sections?: { seq: number; level: number; heading: string }[];
+}
+
+export interface SystemMetadata {
+  app_name: string;
+  snapshot_utc: string;
+  accounts: SystemAccount[];
+  documents: KnowledgeDocument[];
+}
+
+export interface RecordsSummary {
+  kind: "customer" | "internal";
+  account_id?: string;
+  role?: string;
+  orders_count?: number;
+  tickets_count?: number;
+  open_tickets_count?: number;
+  total_accounts?: number;
+  total_orders?: number;
+  total_tickets?: number;
+  recent_orders?: any[];
+  recent_tickets?: any[];
 }
 
 export async function login(sessionKey: string): Promise<string> {
@@ -58,7 +189,6 @@ export async function login(sessionKey: string): Promise<string> {
   return body.token as string;
 }
 
-/** Resolve the caller behind a token (works for mock and signed tokens). */
 export async function fetchMe(token: string): Promise<CallerInfo> {
   const res = await fetch(`${API_BASE}/api/me`, {
     headers: { Authorization: `Bearer ${token}` },
@@ -67,7 +197,6 @@ export async function fetchMe(token: string): Promise<CallerInfo> {
   return res.json();
 }
 
-/** Username/password sign-in for both customer and staff accounts. */
 export async function credentialLogin(
   username: string,
   password: string
@@ -94,7 +223,12 @@ export async function sendChat(
   });
   if (!res.ok) {
     const detail = await res.text();
-    throw new Error(`chat failed (${res.status}): ${detail.slice(0, 200)}`);
+    let msg = detail;
+    try {
+      const parsed = JSON.parse(detail);
+      msg = parsed.detail || detail;
+    } catch {}
+    throw new Error(msg || `Chat request failed (${res.status})`);
   }
   return res.json();
 }
@@ -133,6 +267,7 @@ export interface InsightsReport {
     priority: string;
     created_at: string;
     problems: string[];
+    governing_source?: { doc_id?: string; title?: string; note?: string };
   }[];
   service_quality: {
     window_days: number;
@@ -160,8 +295,35 @@ export async function fetchInsights(token: string): Promise<InsightsReport> {
   const res = await fetch(`${API_BASE}/api/insights/summary`, {
     headers: { Authorization: `Bearer ${token}` },
   });
-  if (!res.ok) throw new Error(`insights failed (${res.status})`);
+  if (!res.ok) {
+    const detail = await res.text();
+    let msg = detail;
+    try {
+      const parsed = JSON.parse(detail);
+      msg = parsed.detail || detail;
+    } catch {}
+    throw new Error(msg || `Insights failed (${res.status})`);
+  }
   return res.json();
 }
 
-export { MOCK_SESSIONS };
+export async function fetchMetadata(): Promise<SystemMetadata> {
+  const res = await fetch(`${API_BASE}/api/metadata`);
+  if (!res.ok) throw new Error(`metadata failed (${res.status})`);
+  return res.json();
+}
+
+export async function fetchDocuments(): Promise<KnowledgeDocument[]> {
+  const res = await fetch(`${API_BASE}/api/documents`);
+  if (!res.ok) throw new Error(`documents failed (${res.status})`);
+  return res.json();
+}
+
+export async function fetchRecordsSummary(token: string): Promise<RecordsSummary> {
+  const res = await fetch(`${API_BASE}/api/records/summary`, {
+    headers: { Authorization: `Bearer ${token}` },
+  });
+  if (!res.ok) throw new Error(`records summary failed (${res.status})`);
+  return res.json();
+}
+

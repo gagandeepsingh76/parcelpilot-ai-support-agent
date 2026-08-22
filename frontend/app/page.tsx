@@ -6,12 +6,26 @@ import {
   ChatTurn,
   MOCK_SESSIONS,
   UiMessage,
+  CallerInfo,
+  credentialLogin,
   decideAction,
   login,
   sendChat,
 } from "../lib/api";
 
 type Receipt = Record<string, unknown> | null;
+
+const ACCOUNT_TO_KEY: Record<string, string> = {
+  "ACC-001": "cust-northstar",
+  "ACC-002": "cust-lumenworks",
+  "ACC-003": "cust-brightcart",
+};
+const ROLE_TO_KEY: Record<string, string> = {
+  support_agent: "staff-agent",
+  ops: "staff-ops",
+  admin: "staff-admin",
+  viewer: "staff-viewer",
+};
 
 const TOOL_LABELS: Record<string, string> = {
   data_lookup: "record lookup",
@@ -39,6 +53,11 @@ export default function ChatPage() {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [receipts, setReceipts] = useState<Record<string, Receipt>>({});
+  const [callerName, setCallerName] = useState("");
+  const [authUser, setAuthUser] = useState("");
+  const [authPass, setAuthPass] = useState("");
+  const [authBusy, setAuthBusy] = useState(false);
+  const [authError, setAuthError] = useState<string | null>(null);
   const listRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -64,10 +83,41 @@ export default function ChatPage() {
       window.localStorage.setItem("pp_session", key);
       setMessages([]);
       setReceipts({});
+      setCallerName(
+        MOCK_SESSIONS.find((s) => s.key === key)?.label.replace(/^.* - /, "") || ""
+      );
     } catch (e) {
       setError(String(e));
     }
   }, []);
+
+  const signIn = useCallback(async () => {
+    if (!authUser.trim() || !authPass || authBusy) return;
+    setAuthBusy(true);
+    setAuthError(null);
+    try {
+      const { token, caller } = await credentialLogin(authUser.trim(), authPass);
+      const mapped =
+        caller.kind === "customer"
+          ? ACCOUNT_TO_KEY[caller.account_id ?? ""]
+          : ROLE_TO_KEY[caller.role ?? ""];
+      const key = mapped ?? sessionKey;
+      setToken(token);
+      setSessionKey(key);
+      setCallerName(caller.display_name);
+      setError(null);
+      setMessages([]);
+      setReceipts({});
+      window.localStorage.setItem("pp_token", token);
+      window.localStorage.setItem("pp_session", key);
+      window.localStorage.setItem("pp_user", caller.display_name);
+      setAuthPass("");
+    } catch (e) {
+      setAuthError(e instanceof Error ? e.message : String(e));
+    } finally {
+      setAuthBusy(false);
+    }
+  }, [authUser, authPass, authBusy, sessionKey]);
 
   const submit = useCallback(
     async (raw?: string) => {
@@ -174,6 +224,38 @@ export default function ChatPage() {
               <span className="feature-pill">Role-scoped access</span>
               <span className="feature-pill">Internal insights</span>
             </div>
+
+            <div className="signin-card">
+              <div className="signin-title">Sign in</div>
+              <div className="signin-row">
+                <input
+                  type="text"
+                  placeholder="username"
+                  value={authUser}
+                  autoComplete="username"
+                  onChange={(e) => setAuthUser(e.target.value)}
+                  onKeyDown={(e) => e.key === "Enter" && signIn()}
+                />
+                <input
+                  type="password"
+                  placeholder="password"
+                  value={authPass}
+                  autoComplete="current-password"
+                  onChange={(e) => setAuthPass(e.target.value)}
+                  onKeyDown={(e) => e.key === "Enter" && signIn()}
+                />
+                <button className="send" onClick={signIn} disabled={authBusy || !authUser.trim() || !authPass}>
+                  {authBusy ? "Signing in…" : "Sign in"}
+                </button>
+              </div>
+              {authError && <div className="error-box" style={{ marginTop: 10 }}>{authError}</div>}
+              <div className="signin-hint">
+                Customers: northstar / demo1234 · Staff: agent / staff1234
+              </div>
+            </div>
+
+            <p className="or-divider">or explore with one click</p>
+
             <div className="session-grid">
               {MOCK_SESSIONS.map((s) => (
                 <button
@@ -191,7 +273,7 @@ export default function ChatPage() {
           <>
             <header className="chatbar">
               <div>
-                <div className="chat-title">{activeSession?.label}</div>
+                <div className="chat-title">{callerName || activeSession?.label}</div>
                 <div className="chat-sub">
                   {isStaff
                     ? "Cross-account tools with scope limits"

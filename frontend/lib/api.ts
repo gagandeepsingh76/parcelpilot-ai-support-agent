@@ -39,6 +39,14 @@ const MOCK_SESSIONS = [
   { key: "staff-viewer", label: "Internal - Viewer (read-only)" },
 ];
 
+export interface CallerInfo {
+  kind: "customer" | "internal";
+  display_name: string;
+  account_id?: string | null;
+  role?: string | null;
+  session_id: string;
+}
+
 export async function login(sessionKey: string): Promise<string> {
   const res = await fetch(`${API_BASE}/api/session/login`, {
     method: "POST",
@@ -48,6 +56,21 @@ export async function login(sessionKey: string): Promise<string> {
   if (!res.ok) throw new Error(`login failed (${res.status})`);
   const body = await res.json();
   return body.token as string;
+}
+
+/** Username/password sign-in for both customer and staff accounts. */
+export async function credentialLogin(
+  username: string,
+  password: string
+): Promise<{ token: string; caller: CallerInfo }> {
+  const res = await fetch(`${API_BASE}/api/auth/login`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ username, password }),
+  });
+  const body = await res.json();
+  if (!res.ok) throw new Error(body.detail || `sign-in failed (${res.status})`);
+  return body;
 }
 
 export async function sendChat(

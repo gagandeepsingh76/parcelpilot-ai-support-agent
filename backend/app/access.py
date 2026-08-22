@@ -155,8 +155,12 @@ def scoped_stage_action(
     action_type: str,
     params: dict[str, Any],
 ) -> dict[str, Any]:
-    from app.tools.actions import stage_action
+    from app.tools.actions import VALID_ACTION_TYPES, ActionError, stage_action
 
+    if action_type not in VALID_ACTION_TYPES:
+        raise ActionError(
+            f"unsupported action '{action_type}'. Valid types: {', '.join(VALID_ACTION_TYPES)}"
+        )
     require_action_scope(caller, action_type)
 
     # the target record must be visible to the caller as well

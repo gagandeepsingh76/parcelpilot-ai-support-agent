@@ -5,6 +5,7 @@ insights and auth are added in subsequent steps.
 """
 
 from app import __version__
+from app.api.routes import router as api_router
 from app.config import get_settings
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
@@ -27,6 +28,8 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+app.include_router(api_router)
 
 
 @app.get("/health")

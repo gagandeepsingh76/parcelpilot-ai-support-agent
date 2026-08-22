@@ -64,6 +64,17 @@ npm run dev                      # http://localhost:3000
 
 See `.env.example`. Never commit real secrets.
 
+## Deployment (free tier)
+
+- **Backend -> Render**: `render.yaml` blueprint at the repo root. Set
+  `ANTHROPIC_API_KEY` in the dashboard; update `BACKEND_CORS_ORIGINS` to your
+  Vercel URL. Free-tier disks are ephemeral, so `app/deploy_bootstrap.py`
+  re-ingests on boot - from `data_pack/` when the real pack is present, else
+  from the committed synthetic fixtures.
+- **Frontend -> Vercel**: import the repo, root directory `frontend`. Set
+  `NEXT_PUBLIC_API_BASE_URL` to the Render URL (e.g.
+  `https://parcelpilot-agent-api.onrender.com`).
+
 ## Status / roadmap
 
 - [x] Step 0 - scaffold
@@ -77,5 +88,5 @@ See `.env.example`. Never commit real secrets.
 - [x] Step 8 - proactive issue-detection dashboard
 - [x] Step 9 - trust hardening (citations, conflict flags)
 - [x] Step 10 - evaluation suite
-- [ ] Step 11 - hosted deployment
+- [x] Step 11 - hosted deployment
 - [ ] Step 12 - architecture/product notes

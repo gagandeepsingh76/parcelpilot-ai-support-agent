@@ -39,3 +39,10 @@ desktop.ini
 
 # local run logs
 *.log
+
+# local helper wrappers / scratch
+powershell.bat
+powershell.cmd
+prompt.txt
+.commandcode/
+New folder/

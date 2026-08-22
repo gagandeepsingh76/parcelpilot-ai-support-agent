@@ -181,3 +181,101 @@ def insights_summary(
     from app.insights.service import compute_insights
 
     return compute_insights(conn)
+
+
+@router.get("/metadata")
+def get_metadata(conn: sqlite3.Connection = Depends(get_conn)) -> dict[str, Any]:
+    """System overview, dataset snapshot timestamp, accounts list, and documents."""
+    from app.timebase import get_snapshot_time
+
+    snapshot = get_snapshot_time(conn).isoformat()
+    accounts = [
+        {
+            "account_id": row["account_id"],
+            "account_name": row["account_name"],
+            "tier": row["tier"],
+            "good_standing": bool(row["good_standing"]),
+        }
+        for row in conn.execute("SELECT account_id, account_name, tier, good_standing FROM accounts").fetchall()
+    ]
+    docs = [
+        {
+            "doc_id": row["doc_id"],
+            "filename": row["filename"],
+            "title": row["title"],
+            "version": row["version"],
+            "status": row["status"],
+            "doc_type": row["doc_type"],
+            "customer_scope": row["customer_scope"],
+            "page_count": row["page_count"],
+        }
+        for row in conn.execute("SELECT doc_id, filename, title, version, status, doc_type, customer_scope, page_count FROM documents").fetchall()
+    ]
+    return {
+        "app_name": "ParcelPilot AI Support Agent",
+        "snapshot_utc": snapshot,
+        "accounts": accounts,
+        "documents": docs,
+    }
+
+
+@router.get("/documents")
+def get_documents(conn: sqlite3.Connection = Depends(get_conn)) -> list[dict[str, Any]]:
+    """List of all authoritative and historical documents in the knowledge base."""
+    docs = []
+    for row in conn.execute("SELECT * FROM documents ORDER BY doc_id").fetchall():
+        sections = [
+            {"seq": s["seq"], "level": s["level"], "heading": s["heading"]}
+            for s in conn.execute("SELECT seq, level, heading FROM document_sections WHERE doc_id = ? ORDER BY seq", (row["doc_id"],)).fetchall()
+        ]
+        docs.append(
+            {
+                "doc_id": row["doc_id"],
+                "filename": row["filename"],
+                "title": row["title"],
+                "version": row["version"],
+                "status": row["status"],
+                "doc_type": row["doc_type"],
+                "customer_scope": row["customer_scope"],
+                "page_count": row["page_count"],
+                "sections": sections,
+            }
+        )
+    return docs
+
+
+@router.get("/records/summary")
+def get_records_summary(
+    caller: Caller = Depends(current_caller),
+    conn: sqlite3.Connection = Depends(get_conn),
+) -> dict[str, Any]:
+    """Summary of accessible operational records for the caller context."""
+    from app.access import scoped_list_orders, scoped_list_tickets
+
+    if caller.is_customer:
+        orders = scoped_list_orders(conn, caller)
+        tickets = scoped_list_tickets(conn, caller)
+        open_tickets = [t for t in tickets if str(t.get("status", "")).lower() not in ("resolved", "closed")]
+        return {
+            "kind": "customer",
+            "account_id": caller.account_id,
+            "orders_count": len(orders),
+            "tickets_count": len(tickets),
+            "open_tickets_count": len(open_tickets),
+            "recent_orders": orders[:5],
+            "recent_tickets": tickets[:5],
+        }
+    # internal caller
+    total_accounts = conn.execute("SELECT COUNT(*) FROM accounts").fetchone()[0]
+    total_orders = conn.execute("SELECT COUNT(*) FROM orders").fetchone()[0]
+    total_tickets = conn.execute("SELECT COUNT(*) FROM tickets").fetchone()[0]
+    open_tickets = conn.execute("SELECT COUNT(*) FROM tickets WHERE lower(status) NOT IN ('resolved', 'closed')").fetchone()[0]
+    return {
+        "kind": "internal",
+        "role": caller.role,
+        "total_accounts": total_accounts,
+        "total_orders": total_orders,
+        "total_tickets": total_tickets,
+        "open_tickets_count": open_tickets,
+    }
+

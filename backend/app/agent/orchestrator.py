@@ -43,6 +43,49 @@ def _content_blocks_to_dicts(content) -> list[dict[str, Any]]:
     return blocks
 
 
+def _describe_tool_call(tool: str, input_params: dict[str, Any]) -> str:
+    """Generate a clean, professional user-facing description of tool activity."""
+    if tool == "search_documents":
+        q = input_params.get("query", "")
+        return f"Searching authoritative policy & contract documents for '{q}'" if q else "Searching authoritative documents"
+    if tool == "data_lookup":
+        l_type = input_params.get("lookup_type", "")
+        oid = input_params.get("order_id", "")
+        tid = input_params.get("ticket_id", "")
+        aid = input_params.get("account_id", "")
+        if l_type == "order":
+            return f"Checking order records for {oid}"
+        if l_type == "cancellation_fee":
+            return f"Calculating deterministic cancellation fee for order {oid}"
+        if l_type == "late_pickup_credit":
+            return f"Evaluating late pickup credit eligibility for order {oid}"
+        if l_type == "late_delivery_credit":
+            return f"Evaluating late delivery compensation for order {oid}"
+        if l_type == "sla_status":
+            return f"Checking SLA tracking status for ticket {tid}"
+        if l_type == "orders_for_account":
+            return f"Listing orders for account {aid}" if aid else "Listing account orders"
+        if l_type == "tickets_for_account":
+            return f"Listing tickets for account {aid}" if aid else "Listing account tickets"
+        if l_type == "account":
+            return f"Retrieving account details for {aid}" if aid else "Retrieving account details"
+        if l_type == "similar_past_tickets":
+            kw = ", ".join(input_params.get("keywords") or [])
+            return f"Reviewing past resolved tickets matching [{kw}] (context only)"
+        return f"Querying structured data: {l_type}"
+    if tool == "stage_action":
+        act = input_params.get("action_type", "")
+        params = input_params.get("params") or {}
+        if act == "create_escalation":
+            return f"Staging human escalation ({params.get('priority', 'P2')}) for operational review"
+        if act == "update_ticket":
+            return f"Staging update for ticket {params.get('ticket_id', '')}"
+        if act == "create_follow_up_task":
+            return f"Staging follow-up task: '{params.get('subject', '')}'"
+        return f"Staging action: {act}"
+    return f"Executing {tool}"
+
+
 @dataclass
 class TurnResult:
     reply: str
@@ -102,8 +145,19 @@ class AgentOrchestrator:
             for block in blocks:
                 if block["type"] != "tool_use":
                     continue
-                payload, meta = execute_tool_call(self.conn, caller, block["name"], block.get("input") or {})
-                result.tools_used.append({"tool": block["name"], "input": block.get("input") or {}})
+                name = block["name"]
+                inp = block.get("input") or {}
+                payload, meta = execute_tool_call(self.conn, caller, name, inp)
+                is_err = bool(isinstance(payload, dict) and payload.get("error"))
+                result.tools_used.append(
+                    {
+                        "tool": name,
+                        "input": inp,
+                        "output": payload,
+                        "status": "error" if is_err else "success",
+                        "label": _describe_tool_call(name, inp),
+                    }
+                )
                 if meta.get("citations"):
                     result.citations.extend(meta["citations"])
                 if meta.get("conflicts"):
@@ -117,7 +171,7 @@ class AgentOrchestrator:
                         "type": "tool_result",
                         "tool_use_id": block["id"],
                         "content": _json(payload),
-                        "is_error": bool(isinstance(payload, dict) and payload.get("error")),
+                        "is_error": is_err,
                     }
                 )
             messages.append({"role": "user", "content": tool_results})

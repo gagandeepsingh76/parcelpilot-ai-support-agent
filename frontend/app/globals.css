@@ -141,3 +141,21 @@ button:disabled { opacity: 0.5; cursor: not-allowed; }
 .composer input[type="text"] { flex: 1; }
 
 .hint { color: var(--muted); font-size: 12px; padding: 6px 2px; }
+
+.insights-grid {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 12px;
+  padding: 14px 0;
+  overflow-y: auto;
+}
+
+.card {
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 14px;
+}
+.card h3 { margin: 0 0 8px; font-size: 14px; }
+.card p, .card li { font-size: 13px; color: var(--text); }
+.card ul { padding-left: 18px; margin: 6px 0; }

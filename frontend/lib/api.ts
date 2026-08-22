@@ -81,4 +81,55 @@ export async function decideAction(
   return body;
 }
 
+export interface InsightsReport {
+  generated_at: string;
+  ticket_volume: {
+    totals: { this_week: number; prev_week: number };
+    by_category: { category: string; count: number }[];
+    spikes: {
+      account_id: string;
+      account_name: string;
+      this_week: number;
+      prev_week: number;
+      top_categories: { category: string; count: number }[];
+    }[];
+  };
+  sla_watchlist: {
+    ticket_id: string;
+    account_name: string;
+    subject: string | null;
+    priority: string;
+    created_at: string;
+    problems: string[];
+  }[];
+  service_quality: {
+    window_days: number;
+    late_pickup_count: number;
+    late_pickups: { order_id: string; delay_minutes: number }[];
+    late_delivery_count: number;
+    late_deliveries: { order_id: string; delay_minutes: number | null; delay_hours?: number | null; note?: string }[];
+    orders_in_flight: number;
+  };
+  credit_exposure: {
+    claimable_now_usd_by_account: Record<string, number>;
+    total_claimable_usd: number;
+    manual_review: { kind: string; order_id: string; basis: string | null }[];
+    basis: string;
+  };
+  cross_customer_patterns: {
+    category: string;
+    accounts_affected: number;
+    shared_keywords: string[];
+    hint: string;
+  }[];
+}
+
+export async function fetchInsights(token: string): Promise<InsightsReport> {
+  const res = await fetch(`${API_BASE}/api/insights/summary`, {
+    headers: { Authorization: `Bearer ${token}` },
+  });
+  if (!res.ok) throw new Error(`insights failed (${res.status})`);
+  return res.json();
+}
+
 export { MOCK_SESSIONS };

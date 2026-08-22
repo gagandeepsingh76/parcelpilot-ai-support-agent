@@ -120,7 +120,9 @@ def insights_summary(
     caller: Caller = Depends(current_caller),
     conn: sqlite3.Connection = Depends(get_conn),
 ) -> dict[str, Any]:
-    """Placeholder endpoint replaced by the Step 8 dashboard service."""
+    """Proactive issue detection across all accounts (internal roles only)."""
     if caller.is_customer:
         raise HTTPException(status_code=403, detail="internal only")
-    return {"status": "not_implemented_until_step_8"}
+    from app.insights.service import compute_insights
+
+    return compute_insights(conn)

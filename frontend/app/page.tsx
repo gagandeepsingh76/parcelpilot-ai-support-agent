@@ -11,6 +11,7 @@ import {
 } from "../lib/api";
 import LoginScreen, { AppSession } from "../components/LoginScreen";
 import ThemeToggle from "../components/ThemeToggle";
+import Markdown from "../components/Markdown";
 
 type Receipt = Record<string, unknown> | null;
 
@@ -212,7 +213,7 @@ export default function ChatPage() {
                 {messages.map((m, i) => (
                   <div key={i} className="msg">
                     <div className={m.role === "user" ? "bubble-user" : "bubble-assistant"}>
-                      {m.content}
+                      {m.role === "assistant" ? <Markdown text={m.content} /> : m.content}
 
                       {"tools_used" in m && m.tools_used && m.tools_used.length > 0 && (
                         <div className="meta-row">

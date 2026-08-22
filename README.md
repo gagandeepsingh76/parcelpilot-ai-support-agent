@@ -71,6 +71,29 @@ npm run dev                      # http://localhost:3000
 - [`ASSUMPTIONS.md`](ASSUMPTIONS.md) - running log of assumptions made while
   building.
 
+## Authentication
+
+Two login paths, both enforced through the same access-control layer:
+
+1. **Username / password** (`POST /api/auth/login`) - real credential auth
+   with PBKDF2-hashed passwords and HMAC-signed tokens. Seeded demo users:
+
+   | Username    | Password   | Identity |
+   |-------------|------------|----------|
+   | northstar   | demo1234   | Customer, ACC-001 |
+   | lumenworks  | demo1234   | Customer, ACC-002 |
+   | brightcart  | demo1234   | Customer, ACC-003 |
+   | agent       | staff1234  | Internal, support_agent |
+   | ops         | staff1234  | Internal, ops |
+   | admin       | staff1234  | Internal, admin |
+   | viewer      | staff1234  | Internal, viewer (read-only) |
+
+2. **One-click mock sessions** (kept for reviewers/tests) - identical RBAC
+   identities via `POST /api/session/login`.
+
+Customers can self-register against an existing account via
+`POST /api/auth/register`; staff accounts are provisioned out-of-band.
+
 ## Environment variables
 
 See `.env.example`. Never commit real secrets.

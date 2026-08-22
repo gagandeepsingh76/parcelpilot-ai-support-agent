@@ -23,6 +23,12 @@ scoped contexts over one backend:
 | P1 | Proactive issue-detection dashboard (internal) | `/insights` route |
 | P2 | Trust: citations, conflict banners, source authority tiers | retrieval + UI |
 
+Frontend quality features: Light/Dark/System theme selector with
+persistence (no flash on load), markdown rendering of assistant replies,
+mobile-responsive layout, and reduced-motion support. Detailed specs live
+in [`docs/planning/`](docs/planning/) (PRD, architecture, design, rules,
+phases).
+
 ## Repository layout
 
 ```
@@ -64,6 +70,8 @@ npm run dev                      # http://localhost:3000
 
 - [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) - system diagram, layer
   responsibilities, design decisions with rationale.
+- [`docs/planning/`](docs/planning/) - canonical planning specs: PRD,
+  ARCHITECTURE_SPEC, DESIGN, RULES and PHASES.
 - [`docs/PRODUCT.md`](docs/PRODUCT.md) - product framing, 3-minute demo
   script, deliberate limitations.
 - [`docs/AI_TOOL_USAGE.md`](docs/AI_TOOL_USAGE.md) - declaration of how AI

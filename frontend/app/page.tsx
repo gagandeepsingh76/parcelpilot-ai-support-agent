@@ -76,27 +76,6 @@ export default function ChatPage() {
     listRef.current?.scrollTo({ top: listRef.current.scrollHeight });
   }, [messages, receipts]);
 
-  const switchSession = useCallback(async (key: string) => {
-    setSessionKey(key);
-    try {
-      const tok = await login(key);
-      setToken(tok);
-      setError(null);
-      window.localStorage.setItem("pp_token", tok);
-      window.localStorage.setItem("pp_session", key);
-      setMessages([]);
-      setReceipts({});
-      setCallerName(
-        MOCK_SESSIONS.find((s) => s.key === key)?.label.replace(/^.* - /, "") || ""
-      );
-      const k = key.startsWith("staff") ? "internal" : "customer";
-      setKind(k);
-      window.localStorage.setItem("pp_kind", k);
-    } catch (e) {
-      setError(String(e));
-    }
-  }, []);
-
   const signIn = useCallback(async () => {
     if (!authUser.trim() || !authPass || authBusy) return;
     setAuthBusy(true);
@@ -178,8 +157,6 @@ export default function ChatPage() {
 
   const isStaff = kind ? kind === "internal" : sessionKey.startsWith("staff");
   const activeSession = MOCK_SESSIONS.find((s) => s.key === sessionKey);
-  const customerSessions = MOCK_SESSIONS.filter((s) => !s.key.startsWith("staff"));
-  const staffSessions = MOCK_SESSIONS.filter((s) => s.key.startsWith("staff"));
   const suggestions = isStaff ? STAFF_SUGGESTIONS : CUSTOMER_SUGGESTIONS;
 
   return (
@@ -200,28 +177,17 @@ export default function ChatPage() {
         </nav>
 
         <div className="sessions">
-          <h4>Customer portals</h4>
-          {customerSessions.map((s) => (
-            <button
-              key={s.key}
-              className={`session-card ${sessionKey === s.key ? "active" : ""}`}
-              onClick={() => switchSession(s.key)}
-            >
-              <span className="session-dot" />
-              {s.label.replace("Customer - ", "")}
-            </button>
-          ))}
-          <h4>Internal console</h4>
-          {staffSessions.map((s) => (
-            <button
-              key={s.key}
-              className={`session-card staff ${sessionKey === s.key ? "active" : ""}`}
-              onClick={() => switchSession(s.key)}
-            >
-              <span className="session-dot" />
-              {s.label.replace("Internal - ", "")}
-            </button>
-          ))}
+          <h4>Signed in as</h4>
+          <div className={`identity-card ${isStaff ? "staff" : ""}`}>
+            <span className="session-dot" />
+            <div>
+              <div className="who">{callerName || sessionKey}</div>
+              <div className="what">
+                {isStaff ? "Internal staff" : "Customer portal"}
+              </div>
+            </div>
+          </div>
+          <p className="switch-hint">Use Sign out to switch identity.</p>
         </div>
 
         <footer className="sidefoot">
@@ -272,23 +238,9 @@ export default function ChatPage() {
               </div>
               {authError && <div className="error-box" style={{ marginTop: 10 }}>{authError}</div>}
               <div className="signin-hint">
-                Customers: northstar / demo1234 · Staff: agent / staff1234
+                Demo customers: northstar · lumenworks · brightcart (password
+                demo1234) &nbsp;|&nbsp; Staff: agent · ops · viewer (password staff1234)
               </div>
-            </div>
-
-            <p className="or-divider">or explore with one click</p>
-
-            <div className="session-grid">
-              {MOCK_SESSIONS.map((s) => (
-                <button
-                  key={s.key}
-                  className={`pick-card ${s.key.startsWith("staff") ? "staff-pick" : ""}`}
-                  onClick={() => switchSession(s.key)}
-                >
-                  <div className="who">{s.label.split(" - ")[1]}</div>
-                  <div className="what">{s.label.split(" - ")[0]} session</div>
-                </button>
-              ))}
             </div>
           </div>
         ) : (

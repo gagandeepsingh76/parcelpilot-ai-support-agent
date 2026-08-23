@@ -224,7 +224,9 @@ def _data_lookup(
 
     if lookup == "account":
         account_id = payload.get("account_id") or caller.account_id
-        return acl.scoped_get_account(conn, caller, account_id)
+        if not account_id:
+            raise ValueError("account_id is required")
+        return acl.scoped_get_account(conn, caller, str(account_id))
 
     order_id = payload.get("order_id")
     ticket_id = payload.get("ticket_id")

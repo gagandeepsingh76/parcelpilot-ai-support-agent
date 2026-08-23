@@ -74,7 +74,7 @@ html[data-theme="light"] {
   --glass-border: rgba(15, 23, 42, 0.09);
   --glass-highlight: rgba(255, 255, 255, 0.8);
   --input-bg: rgba(15, 23, 42, 0.035);
-  --card-shadow: 0 20px 50px rgba(15, 23, 42, 0.08);
+  --card-shadow: 0 10px 30px rgba(15, 23, 42, 0.05), 0 1px 3px rgba(15, 23, 42, 0.03);
 }
 
 * {
@@ -132,9 +132,47 @@ a {
 
 .shell {
   display: flex;
-  height: 100vh;
+  height: 100dvh;
   width: 100vw;
   overflow: hidden;
+  flex-direction: column;
+}
+
+@media (min-width: 769px) {
+  .shell {
+    flex-direction: row;
+  }
+}
+
+.mobile-topbar {
+  display: none;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 16px;
+  background: var(--panel-solid);
+  border-bottom: 1px solid var(--border);
+  flex-shrink: 0;
+}
+
+.hamburger-btn {
+  background: none;
+  border: none;
+  color: var(--text);
+  font-size: 24px;
+  cursor: pointer;
+  padding: 4px;
+}
+
+.mobile-logo {
+  font-size: 24px !important;
+  margin: 0;
+}
+
+.sidebar-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.5);
+  z-index: 100;
 }
 
 .sidebar {
@@ -147,7 +185,43 @@ a {
   border-right: 1px solid var(--border);
   background: var(--panel-solid);
   overflow-y: auto;
-  z-index: 10;
+  z-index: 101;
+  transition: transform 0.2s ease;
+}
+
+.mobile-close-sidebar {
+  display: none;
+  background: none;
+  border: none;
+  color: var(--muted);
+  font-size: 20px;
+  cursor: pointer;
+  padding: 4px;
+}
+
+.sidebar-brand-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+@media (max-width: 768px) {
+  .mobile-topbar {
+    display: flex;
+  }
+  .sidebar {
+    position: fixed;
+    top: 0;
+    left: 0;
+    height: 100dvh;
+    transform: translateX(-100%);
+  }
+  .sidebar.open {
+    transform: translateX(0);
+  }
+  .mobile-close-sidebar {
+    display: block;
+  }
 }
 
 .sidebar-brand-block {
@@ -768,7 +842,8 @@ a {
   gap: 10px;
 }
 
-.composer input[type="text"] {
+.composer input[type="text"],
+.composer textarea {
   flex: 1;
   background: var(--input-bg);
   border: 1px solid var(--border);
@@ -782,13 +857,15 @@ a {
   box-shadow: inset 0 1px 0 var(--glass-highlight);
 }
 
-.composer input[type="text"]:focus {
+.composer input[type="text"]:focus,
+.composer textarea:focus {
   border-color: var(--accent);
   background: var(--panel-solid);
   box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.15);
 }
 
-.composer input::placeholder {
+.composer input::placeholder,
+.composer textarea::placeholder {
   color: var(--faint);
 }
 

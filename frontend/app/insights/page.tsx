@@ -244,7 +244,11 @@ export default function InsightsPage() {
                 badge={report.sla_watchlist.length > 0 ? "Urgent" : "Cleared"}
               >
                 {report.sla_watchlist.length === 0 ? (
-                  <div className="empty-section-notice">✓ All active tickets are within their contractual SLA window.</div>
+                  <div className="empty-section-notice" style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '8px', padding: '32px 0', color: 'var(--green)' }}>
+                    <div style={{ fontSize: '32px' }}>🎉</div>
+                    <strong>All Clear!</strong>
+                    <span>All active tickets are within their contractual SLA window.</span>
+                  </div>
                 ) : (
                   <div className="sla-watchlist-table">
                     {report.sla_watchlist.map((t) => {
@@ -355,7 +359,10 @@ export default function InsightsPage() {
                   <div className="quality-sublist">
                     <div className="sublist-heading">Late Pickups (&gt;10 min):</div>
                     {report.service_quality.late_pickups.length === 0 ? (
-                      <div className="no-items">None recorded in window</div>
+                      <div className="no-items" style={{ padding: '16px 0', textAlign: 'center', opacity: 0.6 }}>
+                        <div style={{ fontSize: '24px', marginBottom: '4px' }}>✨</div>
+                        None recorded in window
+                      </div>
                     ) : (
                       <ul>
                         {report.service_quality.late_pickups.slice(0, 5).map((o) => (
@@ -370,7 +377,10 @@ export default function InsightsPage() {
                   <div className="quality-sublist">
                     <div className="sublist-heading">Late Deliveries:</div>
                     {report.service_quality.late_deliveries.length === 0 ? (
-                      <div className="no-items">None recorded in window</div>
+                      <div className="no-items" style={{ padding: '16px 0', textAlign: 'center', opacity: 0.6 }}>
+                        <div style={{ fontSize: '24px', marginBottom: '4px' }}>✨</div>
+                        None recorded in window
+                      </div>
                     ) : (
                       <ul>
                         {report.service_quality.late_deliveries.slice(0, 5).map((o) => (
@@ -411,13 +421,16 @@ export default function InsightsPage() {
             </div>
           </div>
         ) : (
-          <div className="loading-container">
-            <span className="typing">
-              <i />
-              <i />
-              <i />
-            </span>
-            <span>Computing deterministic insights across accounts...</span>
+          <div className="insights-skeleton-container" style={{ display: 'flex', flexDirection: 'column', gap: '24px', opacity: 0.7, animation: 'pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite' }}>
+            <div style={{ display: 'flex', gap: '16px' }}>
+              {[1, 2, 3, 4].map(i => (
+                <div key={i} style={{ flex: 1, height: '120px', background: 'var(--panel)', borderRadius: '12px' }} />
+              ))}
+            </div>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '24px' }}>
+              <div style={{ height: '300px', background: 'var(--panel)', borderRadius: '14px' }} />
+              <div style={{ height: '300px', background: 'var(--panel)', borderRadius: '14px' }} />
+            </div>
           </div>
         )}
       </main>

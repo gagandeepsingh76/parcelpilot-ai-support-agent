@@ -7,24 +7,20 @@ from __future__ import annotations
 
 import sqlite3
 from functools import lru_cache
-from typing import Any
+from typing import Any, Generator
 
 from fastapi import APIRouter, Depends, Header, HTTPException
 from pydantic import BaseModel
 
-from app.access import Caller, AccessDeniedError, registry
-from app.agent.orchestrator import AgentOrchestrator, get_orchestrator
-from app.config import get_settings
-
-router = APIRouter(prefix="/api")
-
+from ..config import get_settings
+from ..access import Caller, AccessDeniedError, registry
+from ..agent.orchestrator import get_orchestrator
 
 @lru_cache
 def _db_path() -> str:
     return get_settings().sqlite_db_path_resolved
 
-
-def get_conn() -> sqlite3.Connection:
+def get_conn() -> Generator[sqlite3.Connection, None, None]:
     conn = sqlite3.connect(_db_path())
     conn.row_factory = sqlite3.Row
     conn.execute("PRAGMA foreign_keys=ON")
@@ -33,39 +29,46 @@ def get_conn() -> sqlite3.Connection:
     finally:
         conn.close()
 
-
 def current_caller(authorization: str | None = Header(default=None)) -> Caller:
     try:
         return registry.resolve(authorization)
     except AccessDeniedError as exc:
         raise HTTPException(status_code=403, detail=str(exc)) from exc
 
+router = APIRouter(prefix="/api")
 
 class LoginRequest(BaseModel):
     session_key: str
-
 
 class ChatRequest(BaseModel):
     message: str
     history: list[dict[str, str]] = []
 
-
 class ActionDecisionRequest(BaseModel):
     pass  # no body needed; the pending id is in the path
 
+class AuthLoginRequest(BaseModel):
+    username: str
+    password: str
+
+class AuthRegisterRequest(BaseModel):
+    username: str
+    password: str
+    account_id: str
+    display_name: str | None = None
 
 def _deterministic_order_lookup(
     conn: sqlite3.Connection, caller: Caller, message: str
 ) -> dict[str, Any] | None:
     """No-LLM fallback for explicit order-ID lookups only."""
     import re
+    from ..access import scoped_get_order
 
     match = re.search(r"\bORD-\d+\b", message or "", flags=re.IGNORECASE)
     if not match:
         return None
 
     order_id = match.group(0).upper()
-    from app.access import scoped_get_order
 
     try:
         order = scoped_get_order(conn, caller, order_id)
@@ -110,24 +113,12 @@ def login(body: LoginRequest) -> dict[str, Any]:
     return {"token": token, "caller": caller.describe()}
 
 
-class AuthLoginRequest(BaseModel):
-    username: str
-    password: str
-
-
-class AuthRegisterRequest(BaseModel):
-    username: str
-    password: str
-    account_id: str
-    display_name: str | None = None
-
-
 @router.post("/auth/login")
 def auth_login(
     body: AuthLoginRequest, conn: sqlite3.Connection = Depends(get_conn)
 ) -> dict[str, Any]:
     """Credential login for both user kinds (customers and internal staff)."""
-    from app import auth
+    from .. import auth
 
     try:
         caller = auth.authenticate(conn, body.username, body.password)
@@ -148,7 +139,7 @@ def auth_register(
 
     Internal staff are provisioned out-of-band (seeded demo users here).
     """
-    from app import auth
+    from .. import auth
 
     try:
         caller = auth.register_customer(
@@ -193,7 +184,7 @@ def confirm_action(
     caller: Caller = Depends(current_caller),
     conn: sqlite3.Connection = Depends(get_conn),
 ) -> dict[str, Any]:
-    from app.access import scoped_confirm_action
+    from ..access import scoped_confirm_action
 
     try:
         return scoped_confirm_action(conn, caller, pending_id)
@@ -209,7 +200,7 @@ def cancel_action(
     caller: Caller = Depends(current_caller),
     conn: sqlite3.Connection = Depends(get_conn),
 ) -> dict[str, Any]:
-    from app.access import scoped_cancel_action
+    from ..access import scoped_cancel_action
 
     try:
         return scoped_cancel_action(conn, caller, pending_id)
@@ -227,7 +218,7 @@ def insights_summary(
     """Proactive issue detection across all accounts (internal roles only)."""
     if caller.is_customer:
         raise HTTPException(status_code=403, detail="internal only")
-    from app.insights.service import compute_insights
+    from ..insights.service import compute_insights
 
     return compute_insights(conn)
 
@@ -235,7 +226,7 @@ def insights_summary(
 @router.get("/metadata")
 def get_metadata(conn: sqlite3.Connection = Depends(get_conn)) -> dict[str, Any]:
     """System overview, dataset snapshot timestamp, accounts list, and documents."""
-    from app.timebase import get_snapshot_time
+    from ..timebase import get_snapshot_time
 
     snapshot = get_snapshot_time(conn).isoformat()
     accounts = [
@@ -299,7 +290,7 @@ def get_records_summary(
     conn: sqlite3.Connection = Depends(get_conn),
 ) -> dict[str, Any]:
     """Summary of accessible operational records for the caller context."""
-    from app.access import scoped_list_orders, scoped_list_tickets
+    from ..access import scoped_list_orders, scoped_list_tickets
 
     if caller.is_customer:
         orders = scoped_list_orders(conn, caller)
@@ -327,4 +318,3 @@ def get_records_summary(
         "total_tickets": total_tickets,
         "open_tickets_count": open_tickets,
     }
-

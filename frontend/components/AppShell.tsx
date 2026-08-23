@@ -24,6 +24,7 @@ export default function AppShell({
   const pathname = usePathname();
   const [showSwitcherModal, setShowSwitcherModal] = useState(false);
   const [isDrawerOpen, setIsDrawerOpen] = useState(false);
+  const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const [switcherBusy, setSwitcherBusy] = useState(false);
 
   const isStaff = session.kind === "internal";
@@ -40,6 +41,7 @@ export default function AppShell({
         sessionKey: spec.key,
       });
       setShowSwitcherModal(false);
+      setIsSidebarOpen(false); // Close sidebar on switch on mobile
     } catch (e) {
       console.error("Switch failed", e);
     } finally {
@@ -49,12 +51,30 @@ export default function AppShell({
 
   return (
     <div className="shell">
+      {/* Mobile Topbar */}
+      <div className="mobile-topbar">
+        <button type="button" className="hamburger-btn" onClick={() => setIsSidebarOpen(true)}>
+          ☰
+        </button>
+        <Link href="/" className="logo mobile-logo">
+          Parcel<span>Pilot</span>
+        </Link>
+      </div>
+
+      {/* Sidebar Overlay for Mobile */}
+      {isSidebarOpen && (
+        <div className="sidebar-overlay" onClick={() => setIsSidebarOpen(false)} />
+      )}
+
       {/* Sidebar */}
-      <aside className="sidebar">
+      <aside className={`sidebar ${isSidebarOpen ? "open" : ""}`}>
         <div className="sidebar-brand-block">
-          <Link href="/" className="logo">
-            Parcel<span>Pilot</span>
-          </Link>
+          <div className="sidebar-brand-top">
+            <Link href="/" className="logo">
+              Parcel<span>Pilot</span>
+            </Link>
+            <button type="button" className="mobile-close-sidebar" onClick={() => setIsSidebarOpen(false)}>✕</button>
+          </div>
           <p className="tagline">Grounded AI Support &amp; Operations</p>
         </div>
 

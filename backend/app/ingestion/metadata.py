@@ -66,7 +66,7 @@ def derive_docmeta(filename: str, page_texts: list[str], accounts: list[dict]) -
     stem = PurePath(filename).stem
     stem_lower = stem.lower()
     first_page = page_texts[0] if page_texts else ""
-    combined_head = "\n".join([first_page] + (page_texts[1][:400] if len(page_texts) > 1 else []))
+    combined_head = "\n".join([first_page] + ([page_texts[1][:400]] if len(page_texts) > 1 else []))
 
     doc_type = None
     stem_upper = stem.upper()

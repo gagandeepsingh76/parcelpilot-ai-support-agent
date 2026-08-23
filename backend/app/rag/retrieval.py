@@ -64,12 +64,13 @@ def search_documents(
     distances = raw.get("distances") or [[]]
     for text, metadata, distance in zip(documents[0], metadatas[0], distances[0]):
         similarity = max(0.0, 1.0 - float(distance))  # cosine distance -> similarity
+        meta_dict = dict(metadata) if metadata else {}
         hits.append(
             {
                 "text": text,
-                "metadata": dict(metadata),
+                "metadata": meta_dict,
                 "similarity": round(similarity, 4),
-                "score": round(combined_score(similarity, metadata, account_id), 4),
+                "score": round(combined_score(similarity, meta_dict, account_id), 4),
             }
         )
 

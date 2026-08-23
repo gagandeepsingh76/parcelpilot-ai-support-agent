@@ -1,7 +1,18 @@
 {
-  "include": ["**/*.py"],
-  "exclude": [".git", "__pycache__", ".venv", "venv", "node_modules", ".vscode"],
-  "paths": {
-    "app/*": ["backend/app/*"]
-  }
+  "include": ["backend"],
+  "exclude": [
+    ".git",
+    "__pycache__",
+    ".venv",
+    "venv",
+    "node_modules",
+    ".vscode",
+    "**/39-0.py",
+    "39-0.py",
+    "scripts"
+  ],
+  "extraPaths": ["backend"],
+  "venvPath": "C:/Users/HP/AppData/Local/hermes/hermes-agent",
+  "venv": "venv",
+  "pythonVersion": "3.11"
 }

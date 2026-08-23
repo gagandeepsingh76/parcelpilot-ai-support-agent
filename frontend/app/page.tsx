@@ -45,6 +45,7 @@ export default function ChatPage() {
   const [receipts, setReceipts] = useState<Record<string, Receipt>>({});
   const listRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
+  const abortControllerRef = useRef<AbortController | null>(null);
 
   useEffect(() => {
     try {
@@ -106,6 +107,15 @@ export default function ChatPage() {
     setError(null);
   }, []);
 
+  const cancelChat = useCallback(() => {
+    if (abortControllerRef.current) {
+      abortControllerRef.current.abort();
+      abortControllerRef.current = null;
+      setBusy(false);
+      setError("Request cancelled.");
+    }
+  }, []);
+
   const submit = useCallback(
     async (raw?: string) => {
       const text = (raw ?? input).trim();
@@ -117,8 +127,10 @@ export default function ChatPage() {
       setInput("");
       setBusy(true);
       setError(null);
+      const controller = new AbortController();
+      abortControllerRef.current = controller;
       try {
-        const turn: ChatTurn = await sendChat(session.token, userMsg.content, history);
+        const turn: ChatTurn = await sendChat(session.token, userMsg.content, history, controller.signal);
         setMessages((prev) => [
           ...prev,
           {
@@ -128,10 +140,14 @@ export default function ChatPage() {
             ...turn,
           },
         ]);
-      } catch (e) {
+      } catch (e: any) {
+        if (e.name === 'AbortError') return;
         setError(e instanceof Error ? e.message : String(e));
       } finally {
-        setBusy(false);
+        if (abortControllerRef.current === controller) {
+          abortControllerRef.current = null;
+          setBusy(false);
+        }
       }
     },
     [input, session, busy, messages]
@@ -304,9 +320,18 @@ export default function ChatPage() {
               {busy && (
                 <div className="msg-wrapper assistant-msg">
                   <div className="bubble-assistant typing-bubble">
-                    <div className="typing-header">
-                      <span className="typing-dot" />
-                      <span>Reasoning across policies, agreements &amp; database...</span>
+                    <div className="typing-header" style={{ display: 'flex', justifyContent: 'space-between', width: '100%' }}>
+                      <div>
+                        <span className="typing-dot" />
+                        <span>Reasoning across policies, agreements &amp; database...</span>
+                      </div>
+                      <button 
+                        type="button" 
+                        onClick={cancelChat} 
+                        style={{ background: 'transparent', border: '1px solid rgba(255,255,255,0.2)', color: 'inherit', borderRadius: '4px', padding: '2px 8px', cursor: 'pointer', fontSize: '12px' }}
+                      >
+                        Stop
+                      </button>
                     </div>
                     <span className="typing">
                       <i />
@@ -321,9 +346,18 @@ export default function ChatPage() {
               {error && (
                 <div className="error-box chat-error">
                   <div className="error-icon">✕</div>
-                  <div className="error-text">
+                  <div className="error-text" style={{ flex: 1 }}>
                     <strong>Request Failed:</strong> {error}
                   </div>
+                  {messages.length > 0 && messages[messages.length - 1].role === 'user' && (
+                    <button 
+                      type="button" 
+                      onClick={() => submit(messages[messages.length - 1].content)}
+                      style={{ background: 'rgba(255,255,255,0.1)', border: 'none', color: 'inherit', borderRadius: '4px', padding: '4px 12px', cursor: 'pointer', fontWeight: 600 }}
+                    >
+                      Retry
+                    </button>
+                  )}
                 </div>
               )}
             </div>
@@ -332,9 +366,9 @@ export default function ChatPage() {
           {/* Composer */}
           <div className="composer">
             <div className="composer-inner">
-              <input
-                ref={inputRef}
-                type="text"
+              <textarea
+                ref={inputRef as any}
+                rows={1}
                 placeholder={
                   isStaff
                     ? "Ask about any account's orders, SLA breaches, credit entitlements, or stage an action..."
@@ -343,8 +377,19 @@ export default function ChatPage() {
                 aria-label="Message to ParcelPilot Agent"
                 value={input}
                 disabled={!session || busy}
-                onChange={(e) => setInput(e.target.value)}
-                onKeyDown={(e) => e.key === "Enter" && submit()}
+                onChange={(e) => {
+                  setInput(e.target.value);
+                  e.target.style.height = "auto";
+                  e.target.style.height = `${Math.min(e.target.scrollHeight, 200)}px`;
+                }}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter" && !e.shiftKey) {
+                    e.preventDefault();
+                    submit();
+                    e.currentTarget.style.height = "auto";
+                  }
+                }}
+                style={{ resize: "none", overflowY: "auto" }}
               />
               <button
                 type="button"

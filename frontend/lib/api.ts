@@ -214,20 +214,39 @@ export async function credentialLogin(
 export async function sendChat(
   token: string,
   message: string,
-  history: { role: string; content: string }[]
+  history: { role: string; content: string }[],
+  signal?: AbortSignal
 ): Promise<ChatTurn> {
   const res = await fetch(`${API_BASE}/api/chat`, {
     method: "POST",
     headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
     body: JSON.stringify({ message, history }),
+    signal,
   });
   if (!res.ok) {
     const detail = await res.text();
     let msg = detail;
     try {
       const parsed = JSON.parse(detail);
-      msg = parsed.detail || detail;
-    } catch {}
+      const errorMessage = parsed.detail || detail;
+      
+      // Handle quota and API failure errors gracefully
+      if (typeof errorMessage === "string") {
+        if (errorMessage.includes("429") || errorMessage.includes("Quota") || errorMessage.includes("RESOURCE_EXHAUSTED")) {
+          msg = "AI service is temporarily unavailable due to capacity limits. Please try again later.";
+        } else if (errorMessage.includes("503") || errorMessage.includes("Service Unavailable")) {
+          msg = "AI service is temporarily unavailable. Please try again later.";
+        } else {
+          msg = errorMessage;
+        }
+      } else {
+        msg = "AI service is temporarily unavailable. Please try again later.";
+      }
+    } catch {
+      if (detail.includes("429") || res.status === 429) {
+        msg = "AI service is temporarily unavailable due to capacity limits. Please try again later.";
+      }
+    }
     throw new Error(msg || `Chat request failed (${res.status})`);
   }
   return res.json();
@@ -300,8 +319,24 @@ export async function fetchInsights(token: string): Promise<InsightsReport> {
     let msg = detail;
     try {
       const parsed = JSON.parse(detail);
-      msg = parsed.detail || detail;
-    } catch {}
+      const errorMessage = parsed.detail || detail;
+
+      if (typeof errorMessage === "string") {
+        if (errorMessage.includes("429") || errorMessage.includes("Quota") || errorMessage.includes("RESOURCE_EXHAUSTED")) {
+          msg = "Insights are temporarily unavailable due to capacity limits. Please try again later.";
+        } else if (errorMessage.includes("503") || errorMessage.includes("Service Unavailable")) {
+          msg = "Insights are temporarily unavailable. Please try again later.";
+        } else {
+          msg = errorMessage;
+        }
+      } else {
+        msg = "Insights are temporarily unavailable. Please try again later.";
+      }
+    } catch {
+      if (detail.includes("429") || res.status === 429) {
+        msg = "Insights are temporarily unavailable due to capacity limits. Please try again later.";
+      }
+    }
     throw new Error(msg || `Insights failed (${res.status})`);
   }
   return res.json();

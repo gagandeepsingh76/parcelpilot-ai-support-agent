@@ -23,8 +23,10 @@ pytestmark = pytest.mark.skipif(
 )
 
 
+from typing import Generator
+
 @pytest.fixture()
-def conn(tmp_path) -> sqlite3.Connection:
+def conn(tmp_path) -> Generator[sqlite3.Connection, None, None]:
     db_path = tmp_path / "pp.db"
     ingest(FIXTURES_DIR, db_path, include_vectors=False)
     c = sqlite3.connect(str(db_path))

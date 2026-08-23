@@ -17,4 +17,4 @@ pytest==9.1.1
 httpx==0.28.1
 
 # Added in later steps:
-anthropic==1.0.0  # Step 6: Claude Messages API with native tool_use
+google-genai==0.2.1  # Step 6: Gemini API with native tool_use

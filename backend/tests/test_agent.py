@@ -13,6 +13,7 @@ import pytest
 from app.access import Caller, registry
 from app.agent.orchestrator import AgentOrchestrator
 from app.ingestion.run import ingest
+from typing import Generator
 from tests.fake_llm import ScriptedLLM, text, tool_use
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
@@ -61,7 +62,7 @@ def staff(role: str = "support_agent") -> Caller:
 
 
 @pytest.fixture()
-def conn(tmp_path) -> sqlite3.Connection:
+def conn(tmp_path) -> Generator[sqlite3.Connection, None, None]:
     db_path = tmp_path / "pp.db"
     ingest(FIXTURES_DIR, db_path, include_vectors=False)
     c = sqlite3.connect(str(db_path))
@@ -92,7 +93,7 @@ def test_lumenworks_late_pickup_credit_multi_tool_flow(conn):
     # the model actually received real computed data
     payloads = [b for b in llm.tool_results_received()]
     joined = str(payloads)
-    assert '"amount_usd": 50.0' in joined or '"amount_usd":50.0' in joined
+    assert '"amount_usd": 50.0' in joined or '"amount_usd":50.0' in joined or "'amount_usd': 50.0" in joined
 
 
 def test_northstar_conflict_is_surfaced_not_hidden(conn):

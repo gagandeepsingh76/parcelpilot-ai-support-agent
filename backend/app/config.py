@@ -22,15 +22,9 @@ class Settings(BaseSettings):
     environment: str = "development"
 
     # LLM
-    llm_provider: str = "anthropic"  # 'anthropic' | 'gemini' | 'openrouter'
-    anthropic_api_key: str = ""
-    anthropic_model: str = "claude-sonnet-4-5"
+    llm_provider: str = "gemini"
     gemini_api_key: str = ""
     gemini_model: str = "gemini-2.5-flash"
-    gemini_base_url: str = "https://generativelanguage.googleapis.com/v1beta/openai"
-    openrouter_api_key: str = ""
-    openrouter_model: str = "google/gemini-2.5-flash"
-    openrouter_base_url: str = "https://openrouter.ai/api/v1"
 
     # Auth - HMAC secret for signed login tokens (set a strong value in prod)
     auth_secret: str = "dev-only-change-me-parcelpilot"

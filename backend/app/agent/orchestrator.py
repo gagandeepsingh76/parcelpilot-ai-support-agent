@@ -1,46 +1,26 @@
-"""The tool-calling agent loop (Req 1 + Req 5).
+"""The tool-calling agent loop using Google Gemini.
 
-run_turn() drives Claude with native tool_use over the three registered
+run_turn() drives Gemini with native tool_use over the registered
 tools, executes every call under access control, and returns a structured
 turn result: reply text, per-turn tool trace, citations, conflict flags,
 staged pending actions, and whether the turn ended in an escalation.
-
-The LLM client is injected so tests can run deterministic scripted agents
-without network access.
 """
 
 from __future__ import annotations
 
 import sqlite3
 from dataclasses import dataclass, field
-from typing import Any, Iterable
+from typing import Any
+
+from google.genai import types
 
 from app.access import Caller
-from app.agent.llm_providers import build_llm_client
+from app.agent.llm_providers import build_llm_client, build_gemini_tools
 from app.agent.prompts import system_prompt_for
 from app.agent.toolspec import TOOL_SCHEMAS, execute_tool_call
 from app.config import get_settings
 
 MAX_TOOL_ROUNDS = 6
-
-
-def _content_blocks_to_dicts(content) -> list[dict[str, Any]]:
-    """SDK objects or plain dicts -> uniform dict blocks."""
-    blocks = []
-    for block in content:
-        if isinstance(block, dict):
-            blocks.append(block)
-            continue
-        block_type = getattr(block, "type", None)
-        if block_type == "text":
-            blocks.append({"type": "text", "text": block.text})
-        elif block_type == "tool_use":
-            blocks.append(
-                {"type": "tool_use", "id": block.id, "name": block.name, "input": block.input}
-            )
-        else:
-            blocks.append({"type": str(block_type), "raw": repr(block)[:200]})
-    return blocks
 
 
 def _describe_tool_call(tool: str, input_params: dict[str, Any]) -> str:
@@ -111,42 +91,69 @@ class AgentOrchestrator:
         self.conn = conn
         self.llm = llm_client
         self.settings = get_settings()
-        provider = (self.settings.llm_provider or "anthropic").lower()
-        self.model = self.settings.anthropic_model
-        if provider == "gemini":
-            self.model = self.settings.gemini_model
-        elif provider == "openrouter":
-            self.model = self.settings.openrouter_model
+        self.model = self.settings.gemini_model
 
     def run_turn(self, caller: Caller, history: list[dict[str, str]], user_message: str) -> TurnResult:
         result = TurnResult(reply="")
-        messages: list[dict[str, Any]] = [
-            *[{"role": m["role"], "content": m["content"]} for m in history[-12:]],
-            {"role": "user", "content": user_message},
-        ]
+        
+        # Build contents from history
+        contents = []
+        for m in history[-12:]:
+            role = "user" if m["role"] == "user" else "model"
+            contents.append(types.Content(role=role, parts=[types.Part.from_text(text=m["content"])]))
+            
+        contents.append(types.Content(role="user", parts=[types.Part.from_text(text=user_message)]))
+        
         system = system_prompt_for(caller)
+        gemini_tools = build_gemini_tools(TOOL_SCHEMAS)
+        
+        config = types.GenerateContentConfig(
+            system_instruction=system,
+            tools=gemini_tools,
+        )
 
         for _round in range(MAX_TOOL_ROUNDS):
-            response = self.llm.messages.create(
-                model=self.model,
-                max_tokens=1400,
-                system=system,
-                tools=TOOL_SCHEMAS,
-                messages=messages,
-            )
-            blocks = _content_blocks_to_dicts(response.content)
+            try:
+                response = self.llm.models.generate_content(
+                    model=self.model,
+                    contents=contents,
+                    config=config,
+                )
+            except Exception as e:
+                # Handle API unavailability, auth errors, etc
+                raise RuntimeError(f"Gemini API request failed: {e}") from e
 
-            if response.stop_reason != "tool_use":
-                result.reply = "\n".join(b.get("text", "") for b in blocks if b["type"] == "text").strip()
+            if not response.candidates:
+                raise RuntimeError("Empty response received from Gemini.")
+            
+            candidate = response.candidates[0]
+            if not candidate.content:
+                raise RuntimeError("Candidate content is empty.")
+                
+            parts = candidate.content.parts or []
+            
+            function_calls = []
+            text_reply = ""
+            for part in parts:
+                if part.function_call:
+                    function_calls.append(part.function_call)
+                elif part.text:
+                    text_reply += part.text + "\n"
+                    
+            if not function_calls:
+                result.reply = text_reply.strip()
                 break
-
-            messages.append({"role": "assistant", "content": blocks})
-            tool_results: list[dict[str, Any]] = []
-            for block in blocks:
-                if block["type"] != "tool_use":
-                    continue
-                name = block["name"]
-                inp = block.get("input") or {}
+                
+            # Append model's response to contents
+            contents.append(candidate.content)
+            
+            tool_responses_parts = []
+            for call in function_calls:
+                name = call.name
+                
+                # Gemini args is usually a dict or structurally similar
+                inp = call.args if isinstance(call.args, dict) else dict(call.args)
+                
                 payload, meta = execute_tool_call(self.conn, caller, name, inp)
                 is_err = bool(isinstance(payload, dict) and payload.get("error"))
                 result.tools_used.append(
@@ -164,17 +171,18 @@ class AgentOrchestrator:
                     result.conflicts.extend(meta["conflicts"])
                 if meta.get("pending_action"):
                     result.pending_actions.append(meta["pending_action"])
-                if meta.get("escalated") or isinstance(payload, dict) and payload.get("escalation_hint"):
+                if meta.get("escalated") or (isinstance(payload, dict) and payload.get("escalation_hint")):
                     result.escalated = True
-                tool_results.append(
-                    {
-                        "type": "tool_result",
-                        "tool_use_id": block["id"],
-                        "content": _json(payload),
-                        "is_error": is_err,
-                    }
+                    
+                tool_responses_parts.append(
+                    types.Part.from_function_response(
+                        name=name,
+                        response=payload
+                    )
                 )
-            messages.append({"role": "user", "content": tool_results})
+                
+            # Append user's tool responses
+            contents.append(types.Content(role="user", parts=tool_responses_parts))
         else:
             result.reply = (
                 result.reply
@@ -212,10 +220,7 @@ _default_orchestrator: AgentOrchestrator | None = None
 
 
 def get_orchestrator(conn: sqlite3.Connection) -> AgentOrchestrator:
-    global _default_orchestrator
-    if _default_orchestrator is None:
-        _default_orchestrator = AgentOrchestrator(conn, build_llm_client())
-    return _default_orchestrator
+    return AgentOrchestrator(conn, build_llm_client())
 
 
-__all__ = ["AgentOrchestrator", "TurnResult", "get_orchestrator", "build_llm_client"]
+__all__ = ["AgentOrchestrator", "TurnResult", "get_orchestrator"]

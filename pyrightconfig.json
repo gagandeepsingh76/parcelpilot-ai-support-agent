@@ -1,0 +1,7 @@
+{
+  "include": ["**/*.py"],
+  "exclude": [".git", "__pycache__", ".venv", "venv", "node_modules", ".vscode"],
+  "paths": {
+    "app/*": ["backend/app/*"]
+  }
+}

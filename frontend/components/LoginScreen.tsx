@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { CallerInfo, MOCK_SESSIONS, MockSessionSpec, credentialLogin, login } from "../lib/api";
 
 export interface AppSession {
@@ -50,9 +50,12 @@ export default function LoginScreen({
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
   const [busy, setBusy] = useState(false);
+  const busyRef = useRef(false);
   const [error, setError] = useState<string | null>(null);
 
   const handleQuickLogin = async (spec: MockSessionSpec) => {
+    if (busyRef.current) return;
+    busyRef.current = true;
     setBusy(true);
     setError(null);
     try {
@@ -66,12 +69,15 @@ export default function LoginScreen({
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
     } finally {
+      busyRef.current = false;
       setBusy(false);
     }
   };
 
-  const handleCredentialLogin = async () => {
-    if (!username.trim() || !password || busy) return;
+  const handleCredentialLogin = async (e?: React.FormEvent) => {
+    if (e) e.preventDefault();
+    if (!username.trim() || !password || busyRef.current) return;
+    busyRef.current = true;
     setBusy(true);
     setError(null);
     try {
@@ -81,6 +87,7 @@ export default function LoginScreen({
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
     } finally {
+      busyRef.current = false;
       setBusy(false);
     }
   };
@@ -187,7 +194,7 @@ export default function LoginScreen({
             </div>
           </div>
         ) : (
-          <div className="cred-login-form">
+          <form className="cred-login-form" onSubmit={handleCredentialLogin}>
             <label className="field">
               <span>Username</span>
               <input
@@ -195,8 +202,8 @@ export default function LoginScreen({
                 placeholder="e.g. northstar, lumenworks, agent, ops"
                 value={username}
                 autoComplete="username"
+                disabled={busy}
                 onChange={(e) => setUsername(e.target.value)}
-                onKeyDown={(e) => e.key === "Enter" && handleCredentialLogin()}
               />
             </label>
             <label className="field">
@@ -206,15 +213,14 @@ export default function LoginScreen({
                 placeholder="••••••••••••"
                 value={password}
                 autoComplete="current-password"
+                disabled={busy}
                 onChange={(e) => setPassword(e.target.value)}
-                onKeyDown={(e) => e.key === "Enter" && handleCredentialLogin()}
               />
             </label>
 
             <button
-              type="button"
+              type="submit"
               className="enter-btn"
-              onClick={handleCredentialLogin}
               disabled={busy || !username.trim() || !password}
             >
               {busy ? "Verifying Credentials…" : "Authenticate & Enter"}
@@ -228,7 +234,7 @@ export default function LoginScreen({
                 <strong>Internal staff:</strong> <code>agent</code>, <code>ops</code>, <code>admin</code>, <code>viewer</code> — password: <code>staff1234</code>
               </div>
             </div>
-          </div>
+          </form>
         )}
 
         <div className="trust-strip">

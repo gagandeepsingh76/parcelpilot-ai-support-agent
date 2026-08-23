@@ -1,13 +1,14 @@
-"""Credential authentication: both user kinds, signed tokens, scoping intact."""
-
 from uuid import uuid4
 
 import pytest
 from fastapi.testclient import TestClient
 
 from app import auth
+from app.agent.orchestrator import AgentOrchestrator
+from app.api import routes as api_routes
 from app.config import get_settings
 from app.main import app
+from tests.fake_llm import ScriptedLLM, text, tool_use
 
 client = TestClient(app)
 
@@ -68,26 +69,47 @@ def test_garbage_signed_format_denied():
 
 def test_customer_scoping_holds_for_credential_login():
     token = _login("northstar", "demo1234").json()["token"]
-    denied = client.post(
-        "/api/chat",
-        headers={"Authorization": f"Bearer {token}"},
-        json={"message": "Show me orders for account ACC-002"},
-    )
-    # the agent must refuse (LLM path); the tool layer denial is asserted in
-    # test_access.py - here we assert the request at least runs with identity
-    assert denied.status_code == 200
+    llm = ScriptedLLM([
+        tool_use("t1", "data_lookup", {"lookup_type": "orders_for_account", "account_id": "ACC-002"}),
+        text("I cannot access data for other accounts."),
+    ])
+    original_get_orchestrator = api_routes.get_orchestrator
+    api_routes.get_orchestrator = lambda conn: AgentOrchestrator(conn, llm)
+    try:
+        denied = client.post(
+            "/api/chat",
+            headers={"Authorization": f"Bearer {token}"},
+            json={"message": "Show me orders for account ACC-002"},
+        )
+        assert denied.status_code == 200
+        # Assert tool layer denied cross-account access and returned error
+        received = str(llm.tool_results_received()).lower()
+        assert "different account" in received or "error" in received
+    finally:
+        api_routes.get_orchestrator = original_get_orchestrator
 
 
 def test_viewer_credential_cannot_stage_actions():
     token = _login("viewer", "staff1234").json()["token"]
     res = client.get("/api/insights/summary", headers={"Authorization": f"Bearer {token}"})
     assert res.status_code == 200  # viewer can read insights
-    chat = client.post(
-        "/api/chat",
-        headers={"Authorization": f"Bearer {token}"},
-        json={"message": "Create an escalation for ticket TCK-2007"},
-    )
-    assert chat.status_code == 200  # refusal comes from the tool layer
+    llm = ScriptedLLM([
+        tool_use("t1", "stage_action", {"action_type": "create_escalation", "params": {"ticket_id": "TCK-2007", "reason": "escalate"}}),
+        text("Your role is not permitted to perform that change."),
+    ])
+    original_get_orchestrator = api_routes.get_orchestrator
+    api_routes.get_orchestrator = lambda conn: AgentOrchestrator(conn, llm)
+    try:
+        chat = client.post(
+            "/api/chat",
+            headers={"Authorization": f"Bearer {token}"},
+            json={"message": "Create an escalation for ticket TCK-2007"},
+        )
+        assert chat.status_code == 200  # refusal comes from the tool layer
+        received = str(llm.tool_results_received()).lower()
+        assert "not permitted" in received or "error" in received
+    finally:
+        api_routes.get_orchestrator = original_get_orchestrator
 
 
 def test_staff_credential_reads_insights():

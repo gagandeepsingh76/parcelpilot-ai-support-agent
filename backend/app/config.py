@@ -46,7 +46,11 @@ class Settings(BaseSettings):
     # Server
     backend_host: str = "0.0.0.0"
     backend_port: int = 8000
-    backend_cors_origins: str = "http://localhost:3000"
+    backend_cors_origins: str = (
+        "https://parcelpilot-frontend.vercel.app,"
+        "http://localhost:3000,http://127.0.0.1:3000,"
+        "http://localhost:8000,http://127.0.0.1:8000"
+    )
 
     @property
     def cors_origins(self) -> List[str]:

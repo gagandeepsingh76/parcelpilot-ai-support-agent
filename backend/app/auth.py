@@ -158,7 +158,11 @@ def seed_default_users(conn: sqlite3.Connection) -> None:
     conn.commit()
 
 
+from pathlib import Path
+
+
 def bootstrap_auth(db_path: str) -> None:
+    Path(db_path).parent.mkdir(parents=True, exist_ok=True)
     conn = sqlite3.connect(db_path)
     conn.row_factory = sqlite3.Row
     try:

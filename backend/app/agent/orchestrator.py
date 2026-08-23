@@ -182,6 +182,11 @@ class AgentOrchestrator:
             )
             result.escalated = True
 
+        # Heuristic backstop for replies that explicitly promise escalation.
+        escalation_phrases = ("escalat", "manual review", "human review", "operator review")
+        if not result.escalated and any(kw in result.reply.lower() for kw in escalation_phrases):
+            result.escalated = True
+
         # de-duplicate citations while keeping order
         seen: set[tuple] = set()
         unique_citations = []

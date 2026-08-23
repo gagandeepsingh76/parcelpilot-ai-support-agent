@@ -54,6 +54,52 @@ class ActionDecisionRequest(BaseModel):
     pass  # no body needed; the pending id is in the path
 
 
+def _deterministic_order_lookup(
+    conn: sqlite3.Connection, caller: Caller, message: str
+) -> dict[str, Any] | None:
+    """No-LLM fallback for explicit order-ID lookups only."""
+    import re
+
+    match = re.search(r"\bORD-\d+\b", message or "", flags=re.IGNORECASE)
+    if not match:
+        return None
+
+    order_id = match.group(0).upper()
+    from app.access import scoped_get_order
+
+    try:
+        order = scoped_get_order(conn, caller, order_id)
+    except AccessDeniedError as exc:
+        raise HTTPException(status_code=403, detail="access denied") from exc
+    except LookupError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+
+    reply = (
+        f"Order {order_id}: status {order.get('status')}; "
+        f"service {order.get('service_type')}; "
+        f"scheduled pickup {order.get('scheduled_pickup_at')}; "
+        f"actual pickup {order.get('actual_pickup_at')}; "
+        f"promised delivery {order.get('promised_delivery_at')}; "
+        f"delivered {order.get('delivered_at')}."
+    )
+    return {
+        "reply": reply,
+        "tools_used": [
+            {
+                "tool": "deterministic_order_lookup",
+                "input": {"order_id": order_id},
+                "output": order,
+                "status": "success",
+                "label": f"Checking order records for {order_id}",
+            }
+        ],
+        "citations": [],
+        "conflicts": [],
+        "pending_actions": [],
+        "escalated": False,
+    }
+
+
 @router.post("/session/login")
 def login(body: LoginRequest) -> dict[str, Any]:
     try:
@@ -133,6 +179,9 @@ def chat(
     try:
         orchestrator = get_orchestrator(conn)
     except RuntimeError as exc:
+        fallback = _deterministic_order_lookup(conn, caller, body.message)
+        if fallback is not None:
+            return fallback
         raise HTTPException(status_code=503, detail=str(exc)) from exc
     result = orchestrator.run_turn(caller, body.history, body.message)
     return result.to_api_dict()

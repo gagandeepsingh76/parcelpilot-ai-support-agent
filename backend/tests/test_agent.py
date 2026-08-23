@@ -128,6 +128,14 @@ def test_escalates_when_no_supporting_source_found(conn, monkeypatch, tmp_path):
     assert "escalat" in result.reply.lower()
 
 
+def test_support_policy_text_does_not_force_escalation(conn):
+    llm = ScriptedLLM([
+        text("The support policy says the standard first response SLA is four business hours."),
+    ])
+    result = run(conn, customer("ACC-003"), llm, "What is our support SLA?")
+    assert result.escalated is False
+
+
 def test_manual_review_calculation_triggers_escalation_path(conn):
     llm = ScriptedLLM([
         tool_use("t1", "data_lookup", {"lookup_type": "late_delivery_credit", "order_id": "ORD-1001"}),
@@ -251,4 +259,71 @@ def test_chat_requires_auth(conn):
         res = client.post("/api/chat", json={"message": "hi"})
         assert res.status_code == 403
     finally:
+        app.dependency_overrides.pop(api_routes.get_conn, None)
+
+
+def test_chat_fallback_order_lookup_is_scoped(conn, tmp_path):
+    from fastapi.testclient import TestClient
+
+    from app.api import routes as api_routes
+    from app.main import app
+
+    def fresh_conn():
+        c = sqlite3.connect(str(tmp_path / "pp.db"))
+        c.row_factory = sqlite3.Row
+        return c
+
+    app.dependency_overrides[api_routes.get_conn] = fresh_conn
+    original_get_orchestrator = api_routes.get_orchestrator
+    api_routes.get_orchestrator = lambda _conn: (_ for _ in ()).throw(
+        RuntimeError("No LLM API key configured")
+    )
+
+    client = TestClient(app)
+    own_token = registry.login("cust-northstar")
+    other_token = registry.login("cust-brightcart")
+    try:
+        own = client.post(
+            "/api/chat",
+            json={"message": "Please look up ORD-1001."},
+            headers={"Authorization": f"Bearer {own_token}"},
+        )
+        assert own.status_code == 200, own.text
+        assert "ORD-1001" in own.json()["reply"]
+
+        denied = client.post(
+            "/api/chat",
+            json={"message": "Please look up ORD-1001."},
+            headers={"Authorization": f"Bearer {other_token}"},
+        )
+        assert denied.status_code == 403
+    finally:
+        api_routes.get_orchestrator = original_get_orchestrator
+        app.dependency_overrides.pop(api_routes.get_conn, None)
+
+
+def test_chat_fallback_keeps_normal_queries_unavailable_without_llm(conn):
+    from fastapi.testclient import TestClient
+
+    from app.api import routes as api_routes
+    from app.main import app
+
+    app.dependency_overrides[api_routes.get_conn] = lambda: conn
+    original_get_orchestrator = api_routes.get_orchestrator
+    api_routes.get_orchestrator = lambda _conn: (_ for _ in ()).throw(
+        RuntimeError("No LLM API key configured")
+    )
+
+    client = TestClient(app)
+    token = registry.login("cust-northstar")
+    try:
+        res = client.post(
+            "/api/chat",
+            json={"message": "What is our cancellation fee policy?"},
+            headers={"Authorization": f"Bearer {token}"},
+        )
+        assert res.status_code == 503
+        assert "No LLM API key configured" in res.json()["detail"]
+    finally:
+        api_routes.get_orchestrator = original_get_orchestrator
         app.dependency_overrides.pop(api_routes.get_conn, None)

@@ -134,3 +134,4 @@ See `.env.example`. Never commit real secrets.
 - [x] Step 10 - evaluation suite
 - [x] Step 11 - hosted deployment
 - [x] Step 12 - architecture/product notes
+Deployment configuration: Vercel Root Directory is configured in the Vercel dashboard as frontend.

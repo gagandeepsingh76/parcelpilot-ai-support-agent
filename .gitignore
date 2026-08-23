@@ -34,7 +34,7 @@ yarn-error.log*
 .DS_Store
 Thumbs.db
 desktop.ini
-.vscode/
+# .vscode/
 .idea/
 
 # local run logs
@@ -50,3 +50,6 @@ New folder/
 Instruction Folder/
 evals/
 tests/
+# Allow only VS Code workspace settings to be tracked
+.vscode/*
+!.vscode/settings.json

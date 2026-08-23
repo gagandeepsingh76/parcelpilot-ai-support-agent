@@ -21,7 +21,7 @@ def _db_path() -> str:
     return get_settings().sqlite_db_path_resolved
 
 def get_conn() -> Generator[sqlite3.Connection, None, None]:
-    conn = sqlite3.connect(_db_path())
+    conn = sqlite3.connect(_db_path(), check_same_thread=False)
     conn.row_factory = sqlite3.Row
     conn.execute("PRAGMA foreign_keys=ON")
     try:
@@ -169,13 +169,24 @@ def chat(
 ) -> dict[str, Any]:
     try:
         orchestrator = get_orchestrator(conn)
-    except RuntimeError as exc:
+        result = orchestrator.run_turn(caller, body.history, body.message)
+        return result.to_api_dict()
+    except Exception as exc:
         fallback = _deterministic_order_lookup(conn, caller, body.message)
         if fallback is not None:
             return fallback
+
+        exc_str = str(exc)
+        if (
+            "429" in exc_str
+            or "RESOURCE_EXHAUSTED" in exc_str
+            or "quota" in exc_str.lower()
+        ):
+            raise HTTPException(
+                status_code=429,
+                detail="AI service is temporarily unavailable because the current API quota has been exhausted. Please try again later.",
+            ) from exc
         raise HTTPException(status_code=503, detail=str(exc)) from exc
-    result = orchestrator.run_turn(caller, body.history, body.message)
-    return result.to_api_dict()
 
 
 @router.post("/actions/{pending_id}/confirm")

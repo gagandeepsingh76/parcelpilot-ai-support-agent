@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { Shield, Lock, Check, X } from "lucide-react";
 import { PendingAction } from "../../lib/api";
 
 interface ActionConfirmationCardProps {
@@ -58,7 +59,7 @@ export default function ActionConfirmationCard({
     <div className={`action-card-container ${isExecuted ? "is-executed" : isCancelled ? "is-cancelled" : "is-pending"}`}>
       <div className="action-card-header">
         <div className="action-type-wrap">
-          <span className="action-shield-icon">🛡️</span>
+          <Shield size={15} strokeWidth={1.75} className="action-shield-icon" aria-hidden="true" />
           <span className="action-type-title">{getActionLabel(action.action_type)}</span>
         </div>
         <div className="action-id-pill">{action.pending_action_id}</div>
@@ -80,7 +81,7 @@ export default function ActionConfirmationCard({
                   {isDiff ? (
                     <span className="action-diff-val">
                       <span className="diff-old">{String(val.from || "none")}</span>
-                      <span className="diff-arrow">➔</span>
+                      <span className="diff-arrow">→</span>
                       <span className="diff-new">{String(val.to)}</span>
                     </span>
                   ) : (
@@ -97,7 +98,8 @@ export default function ActionConfirmationCard({
       {!receipt ? (
         <div className="action-decision-bar">
           <div className="action-safety-notice">
-            <span>🔒 <strong>Gated Execution:</strong> This action will only be executed upon explicit confirmation.</span>
+            <Lock size={13} strokeWidth={2} aria-hidden="true" />
+            <span><strong>Gated Execution:</strong> This action will only be executed upon explicit confirmation.</span>
           </div>
           <div className="action-btn-group">
             <button
@@ -106,7 +108,8 @@ export default function ActionConfirmationCard({
               onClick={handleConfirm}
               disabled={Boolean(busy)}
             >
-              {busy === "confirming" ? "Executing..." : "✓ Confirm & Execute"}
+              <Check size={14} strokeWidth={2.5} aria-hidden="true" />
+              {busy === "confirming" ? "Executing..." : "Confirm & Execute"}
             </button>
             <button
               type="button"
@@ -121,7 +124,7 @@ export default function ActionConfirmationCard({
       ) : isExecuted ? (
         <div className="action-receipt-box success">
           <div className="receipt-head">
-            <span className="receipt-check">✓</span>
+            <Check size={14} strokeWidth={2.5} className="receipt-check" aria-hidden="true" />
             <strong>Action Successfully Executed & Audited</strong>
           </div>
           <div className="receipt-details">
@@ -138,7 +141,7 @@ export default function ActionConfirmationCard({
         </div>
       ) : (
         <div className="action-receipt-box cancelled">
-          <span className="receipt-cancel-icon">✕</span>
+          <X size={14} strokeWidth={2.5} className="receipt-cancel-icon" aria-hidden="true" />
           <span>Action was cancelled — no changes were made to system records.</span>
         </div>
       )}

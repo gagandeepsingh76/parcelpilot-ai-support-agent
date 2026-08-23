@@ -1,5 +1,6 @@
 "use client";
 
+import { AlertTriangle } from "lucide-react";
 import { Citation } from "../../lib/api";
 
 interface ConflictBannerProps {
@@ -18,7 +19,7 @@ export default function ConflictBanner({ conflicts }: ConflictBannerProps) {
         return (
           <div key={idx} className="conflict-banner-card">
             <div className="conflict-banner-icon-wrap">
-              <span className="conflict-icon">⚠️</span>
+              <AlertTriangle size={17} strokeWidth={1.75} className="conflict-icon" aria-hidden="true" />
             </div>
             <div className="conflict-banner-content">
               <div className="conflict-banner-title">

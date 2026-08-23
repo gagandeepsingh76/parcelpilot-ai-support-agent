@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { KnowledgeDocument, SystemMetadata, fetchDocuments, fetchMetadata } from "../../lib/api";
+import { FolderOpen, X } from "lucide-react";
 
 interface ContextDrawerProps {
   isOpen: boolean;
@@ -43,11 +44,11 @@ export default function ContextDrawer({
       <aside className="drawer-panel" onClick={(e) => e.stopPropagation()}>
         <div className="drawer-header">
           <div className="drawer-title-wrap">
-            <span className="drawer-icon">🗂️</span>
+            <FolderOpen size={16} strokeWidth={1.75} className="drawer-icon" aria-hidden="true" />
             <h3>System Knowledge & Context</h3>
           </div>
           <button type="button" className="drawer-close-btn" onClick={onClose} aria-label="Close panel">
-            ✕
+            <X size={14} strokeWidth={2} />
           </button>
         </div>
 

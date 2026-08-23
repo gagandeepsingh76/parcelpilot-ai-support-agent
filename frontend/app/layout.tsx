@@ -10,7 +10,7 @@ const caveat = Caveat({
 
 const inter = Inter({
   subsets: ["latin"],
-  weight: ["400", "500", "600", "700"],
+  weight: ["300", "400", "500", "600", "700"],
   variable: "--font-sans",
 });
 
@@ -26,7 +26,8 @@ export const metadata: Metadata = {
     "B2B logistics support agent with cited answers, confirmation-gated actions, and internal insights.",
 };
 
-const themeScript = `(function(){try{var p=localStorage.getItem("pp-theme")||"system";var d=p==="dark"||(p==="system"&&window.matchMedia("(prefers-color-scheme: dark)").matches);document.documentElement.dataset.theme=d?"dark":"light";}catch(e){}})();`;
+// Theme script: only light or dark, defaults to dark. No system mode.
+const themeScript = `(function(){try{var p=localStorage.getItem("pp-theme");var d=p==="dark"||(p!=="light");document.documentElement.dataset.theme=d?"dark":"light";}catch(e){document.documentElement.dataset.theme="dark";}})();`;
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (

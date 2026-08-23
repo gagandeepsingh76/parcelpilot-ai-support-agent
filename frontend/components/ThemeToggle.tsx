@@ -1,40 +1,27 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
+import { Sun, Moon } from "lucide-react";
 
-type ThemePref = "light" | "dark" | "system";
+type ThemePref = "light" | "dark";
 
 const STORAGE_KEY = "pp-theme";
 
-function resolve(pref: ThemePref): "light" | "dark" {
-  if (pref === "system") {
-    return window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light";
-  }
-  return pref;
-}
-
 function apply(pref: ThemePref) {
-  document.documentElement.dataset.theme = resolve(pref);
+  document.documentElement.dataset.theme = pref;
 }
 
 export default function ThemeToggle() {
-  const [pref, setPref] = useState<ThemePref>("system");
+  const [pref, setPref] = useState<ThemePref>("dark");
 
   useEffect(() => {
-    let saved: ThemePref = "system";
+    let saved: ThemePref = "dark";
     try {
       const raw = localStorage.getItem(STORAGE_KEY);
-      if (raw === "light" || raw === "dark" || raw === "system") saved = raw;
+      if (raw === "light" || raw === "dark") saved = raw;
     } catch {}
     setPref(saved);
     apply(saved);
-
-    const mq = window.matchMedia("(prefers-color-scheme: dark)");
-    const onChange = () => {
-      if ((localStorage.getItem(STORAGE_KEY) || "system") === "system") apply("system");
-    };
-    mq.addEventListener("change", onChange);
-    return () => mq.removeEventListener("change", onChange);
   }, []);
 
   const choose = useCallback((next: ThemePref) => {
@@ -46,23 +33,25 @@ export default function ThemeToggle() {
   }, []);
 
   return (
-    <div className="theme-toggle" role="group" aria-label="Theme">
-      {(
-        [
-          ["light", "Light"],
-          ["dark", "Dark"],
-          ["system", "System"],
-        ] as const
-      ).map(([value, label]) => (
-        <button
-          key={value}
-          className={pref === value ? "on" : ""}
-          aria-pressed={pref === value}
-          onClick={() => choose(value)}
-        >
-          {label}
-        </button>
-      ))}
+    <div className="theme-toggle" role="group" aria-label="Theme preference">
+      <button
+        className={pref === "light" ? "on" : ""}
+        aria-pressed={pref === "light"}
+        onClick={() => choose("light")}
+        title="Switch to Light mode"
+      >
+        <Sun size={13} strokeWidth={2} aria-hidden="true" />
+        <span>Light</span>
+      </button>
+      <button
+        className={pref === "dark" ? "on" : ""}
+        aria-pressed={pref === "dark"}
+        onClick={() => choose("dark")}
+        title="Switch to Dark mode"
+      >
+        <Moon size={13} strokeWidth={2} aria-hidden="true" />
+        <span>Dark</span>
+      </button>
     </div>
   );
 }

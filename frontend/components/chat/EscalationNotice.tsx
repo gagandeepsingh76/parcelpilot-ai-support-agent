@@ -1,5 +1,7 @@
 "use client";
 
+import { AlertOctagon } from "lucide-react";
+
 interface EscalationNoticeProps {
   reason?: string;
 }
@@ -8,7 +10,7 @@ export default function EscalationNotice({ reason }: EscalationNoticeProps) {
   return (
     <div className="escalation-notice-container">
       <div className="escalation-notice-icon-wrap">
-        <span className="escalation-icon">🚨</span>
+        <AlertOctagon size={18} strokeWidth={1.75} className="escalation-icon" aria-hidden="true" />
       </div>
       <div className="escalation-notice-content">
         <div className="escalation-title">

@@ -1,10 +1,37 @@
 "use client";
 
 import { useState } from "react";
+import { Search, Database, Shield, Settings } from "lucide-react";
 import { ToolUsed } from "../../lib/api";
 
 interface ToolActivityTimelineProps {
   tools: ToolUsed[];
+}
+
+function getToolIcon(tool: string) {
+  switch (tool) {
+    case "search_documents":
+      return <Search size={15} strokeWidth={1.75} aria-hidden="true" />;
+    case "data_lookup":
+      return <Database size={15} strokeWidth={1.75} aria-hidden="true" />;
+    case "stage_action":
+      return <Shield size={15} strokeWidth={1.75} aria-hidden="true" />;
+    default:
+      return <Settings size={15} strokeWidth={1.75} aria-hidden="true" />;
+  }
+}
+
+function getToolCategory(tool: string) {
+  switch (tool) {
+    case "search_documents":
+      return "Document Retrieval (RAG)";
+    case "data_lookup":
+      return "Structured Data & Calculations";
+    case "stage_action":
+      return "Action Staging (Gated)";
+    default:
+      return "System Tool";
+  }
 }
 
 export default function ToolActivityTimeline({ tools }: ToolActivityTimelineProps) {
@@ -15,32 +42,6 @@ export default function ToolActivityTimeline({ tools }: ToolActivityTimelineProp
 
   const toggleExpand = (index: number) => {
     setExpandedIndex(expandedIndex === index ? null : index);
-  };
-
-  const getToolIcon = (tool: string) => {
-    switch (tool) {
-      case "search_documents":
-        return "📚";
-      case "data_lookup":
-        return "⚡";
-      case "stage_action":
-        return "🛡️";
-      default:
-        return "⚙️";
-    }
-  };
-
-  const getToolCategory = (tool: string) => {
-    switch (tool) {
-      case "search_documents":
-        return "Document Retrieval (RAG)";
-      case "data_lookup":
-        return "Structured Data & Calculations";
-      case "stage_action":
-        return "Action Staging (Gated)";
-      default:
-        return "System Tool";
-    }
   };
 
   return (
@@ -70,7 +71,7 @@ export default function ToolActivityTimeline({ tools }: ToolActivityTimelineProp
               <div key={idx} className={`tool-step-item ${isError ? "has-error" : "success"}`}>
                 <div className="tool-step-main" onClick={() => toggleExpand(idx)}>
                   <div className="tool-step-icon-wrap">
-                    <span className="tool-step-icon">{getToolIcon(t.tool)}</span>
+                    {getToolIcon(t.tool)}
                   </div>
                   <div className="tool-step-info">
                     <div className="tool-step-label-row">

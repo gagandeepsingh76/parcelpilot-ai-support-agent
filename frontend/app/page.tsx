@@ -16,6 +16,7 @@ import SourceEvidenceCard from "../components/chat/SourceEvidenceCard";
 import ConflictBanner from "../components/chat/ConflictBanner";
 import ActionConfirmationCard from "../components/chat/ActionConfirmationCard";
 import EscalationNotice from "../components/chat/EscalationNotice";
+import { Sparkles, Shield, ArrowRight, AlertCircle, Send, Square, RotateCcw } from "lucide-react";
 
 type Receipt = Record<string, any> | null;
 
@@ -218,7 +219,9 @@ export default function ChatPage() {
               {/* Empty / Welcome State */}
               {messages.length === 0 && (
                 <div className="welcome-state-card">
-                  <div className="welcome-icon-glow">✨</div>
+                  <div className="welcome-icon-glow">
+                    <Sparkles size={32} strokeWidth={1.5} aria-hidden="true" className="welcome-sparkle" />
+                  </div>
                   <h3 className="welcome-title">
                     {isStaff
                       ? `Welcome to ParcelPilot Operations, ${session.callerName || "Specialist"}`
@@ -231,7 +234,7 @@ export default function ChatPage() {
                   </p>
 
                   <div className="welcome-security-card">
-                    <span className="sec-icon">🔒</span>
+                    <Shield size={13} strokeWidth={1.75} className="sec-icon" aria-hidden="true" />
                     <span>
                       {isStaff
                         ? "Active Identity: Internal Operations (RBAC Enforced) · Multi-Account Data Scoping"
@@ -249,7 +252,7 @@ export default function ChatPage() {
                           className="suggestion-card"
                           onClick={() => submit(s)}
                         >
-                          <span className="suggestion-arrow">➔</span>
+                          <ArrowRight size={14} strokeWidth={2} className="suggestion-arrow" aria-hidden="true" />
                           <span className="suggestion-text">{s}</span>
                         </button>
                       ))}
@@ -320,16 +323,19 @@ export default function ChatPage() {
               {busy && (
                 <div className="msg-wrapper assistant-msg">
                   <div className="bubble-assistant typing-bubble">
-                    <div className="typing-header" style={{ display: 'flex', justifyContent: 'space-between', width: '100%' }}>
-                      <div>
+                    <div className="typing-header">
+                      <div className="typing-status">
                         <span className="typing-dot" />
                         <span>Reasoning across policies, agreements &amp; database...</span>
                       </div>
-                      <button 
-                        type="button" 
-                        onClick={cancelChat} 
-                        style={{ background: 'transparent', border: '1px solid rgba(255,255,255,0.2)', color: 'inherit', borderRadius: '4px', padding: '2px 8px', cursor: 'pointer', fontSize: '12px' }}
+                      <button
+                        type="button"
+                        className="stop-btn"
+                        onClick={cancelChat}
+                        aria-label="Stop generation"
+                        title="Stop generation"
                       >
+                        <Square size={11} strokeWidth={0} fill="currentColor" aria-hidden="true" />
                         Stop
                       </button>
                     </div>
@@ -345,16 +351,18 @@ export default function ChatPage() {
               {/* Error Box */}
               {error && (
                 <div className="error-box chat-error">
-                  <div className="error-icon">✕</div>
+                  <AlertCircle size={15} strokeWidth={2} className="error-icon" aria-hidden="true" />
                   <div className="error-text" style={{ flex: 1 }}>
                     <strong>Request Failed:</strong> {error}
                   </div>
                   {messages.length > 0 && messages[messages.length - 1].role === 'user' && (
-                    <button 
-                      type="button" 
+                    <button
+                      type="button"
+                      className="retry-btn"
                       onClick={() => submit(messages[messages.length - 1].content)}
-                      style={{ background: 'rgba(255,255,255,0.1)', border: 'none', color: 'inherit', borderRadius: '4px', padding: '4px 12px', cursor: 'pointer', fontWeight: 600 }}
+                      aria-label="Retry last request"
                     >
+                      <RotateCcw size={12} strokeWidth={2} aria-hidden="true" />
                       Retry
                     </button>
                   )}
@@ -396,9 +404,10 @@ export default function ChatPage() {
                 className="send"
                 onClick={() => submit()}
                 disabled={!session || busy || !input.trim()}
+                aria-label="Send message"
               >
                 <span>Send</span>
-                <span className="send-arrow">➔</span>
+                <Send size={14} strokeWidth={2} aria-hidden="true" />
               </button>
             </div>
           </div>

@@ -7,6 +7,15 @@ import { AppSession } from "./LoginScreen";
 import ThemeToggle from "./ThemeToggle";
 import { MOCK_SESSIONS, MockSessionSpec, login } from "../lib/api";
 import ContextDrawer from "./chat/ContextDrawer";
+import {
+  Menu,
+  X,
+  MessageSquare,
+  BarChart3,
+  BookOpen,
+  Building2,
+  Wrench,
+} from "lucide-react";
 
 interface AppShellProps {
   children: ReactNode;
@@ -41,7 +50,7 @@ export default function AppShell({
         sessionKey: spec.key,
       });
       setShowSwitcherModal(false);
-      setIsSidebarOpen(false); // Close sidebar on switch on mobile
+      setIsSidebarOpen(false);
     } catch (e) {
       console.error("Switch failed", e);
     } finally {
@@ -53,8 +62,13 @@ export default function AppShell({
     <div className="shell">
       {/* Mobile Topbar */}
       <div className="mobile-topbar">
-        <button type="button" className="hamburger-btn" onClick={() => setIsSidebarOpen(true)}>
-          ☰
+        <button
+          type="button"
+          className="hamburger-btn"
+          onClick={() => setIsSidebarOpen(true)}
+          aria-label="Open navigation menu"
+        >
+          <Menu size={20} strokeWidth={1.75} />
         </button>
         <Link href="/" className="logo mobile-logo">
           Parcel<span>Pilot</span>
@@ -73,7 +87,14 @@ export default function AppShell({
             <Link href="/" className="logo">
               Parcel<span>Pilot</span>
             </Link>
-            <button type="button" className="mobile-close-sidebar" onClick={() => setIsSidebarOpen(false)}>✕</button>
+            <button
+              type="button"
+              className="mobile-close-sidebar"
+              onClick={() => setIsSidebarOpen(false)}
+              aria-label="Close navigation menu"
+            >
+              <X size={16} strokeWidth={2} />
+            </button>
           </div>
           <p className="tagline">Grounded AI Support &amp; Operations</p>
         </div>
@@ -83,14 +104,14 @@ export default function AppShell({
             href="/"
             className={`navlink ${pathname === "/" ? "active" : ""}`}
           >
-            <span className="nav-icon">💬</span>
+            <MessageSquare size={16} strokeWidth={1.75} className="nav-icon" aria-hidden="true" />
             <span>AI Assistant</span>
           </Link>
           <Link
             href="/insights"
             className={`navlink ${pathname === "/insights" ? "active" : ""}`}
           >
-            <span className="nav-icon">📊</span>
+            <BarChart3 size={16} strokeWidth={1.75} className="nav-icon" aria-hidden="true" />
             <span>Operations Insights</span>
           </Link>
           <button
@@ -98,7 +119,7 @@ export default function AppShell({
             className="navlink nav-btn"
             onClick={() => setIsDrawerOpen(true)}
           >
-            <span className="nav-icon">📚</span>
+            <BookOpen size={16} strokeWidth={1.75} className="nav-icon" aria-hidden="true" />
             <span>Knowledge &amp; Context</span>
           </button>
         </nav>
@@ -165,14 +186,18 @@ export default function AppShell({
                 type="button"
                 className="modal-close-btn"
                 onClick={() => setShowSwitcherModal(false)}
+                aria-label="Close persona switcher"
               >
-                ✕
+                <X size={14} strokeWidth={2} />
               </button>
             </div>
 
             <div className="persona-sections-wrap">
               <div className="persona-group">
-                <div className="group-title">🏢 Customer Portals (Scoped Access)</div>
+                <div className="group-title">
+                  <Building2 size={13} strokeWidth={1.75} aria-hidden="true" />
+                  Customer Portals (Scoped Access)
+                </div>
                 <div className="persona-grid">
                   {MOCK_SESSIONS.filter((s) => s.kind === "customer").map((spec) => {
                     const isCurrent = spec.key === session.sessionKey;
@@ -197,7 +222,10 @@ export default function AppShell({
               </div>
 
               <div className="persona-group">
-                <div className="group-title">🛠️ Internal Staff (Multi-Account RBAC)</div>
+                <div className="group-title">
+                  <Wrench size={13} strokeWidth={1.75} aria-hidden="true" />
+                  Internal Staff (Multi-Account RBAC)
+                </div>
                 <div className="persona-grid">
                   {MOCK_SESSIONS.filter((s) => s.kind === "internal").map((spec) => {
                     const isCurrent = spec.key === session.sessionKey;

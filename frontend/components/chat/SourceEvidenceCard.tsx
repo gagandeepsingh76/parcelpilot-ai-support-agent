@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { FileText, Copy, Check } from "lucide-react";
 import { Citation } from "../../lib/api";
 
 interface SourceEvidenceProps {
@@ -61,7 +62,7 @@ export default function SourceEvidenceCard({ citations }: SourceEvidenceProps) {
     <div className="source-evidence-container">
       <div className="source-evidence-header">
         <div className="source-title-wrap">
-          <span className="source-icon">📑</span>
+          <FileText size={14} strokeWidth={1.75} className="source-icon" aria-hidden="true" />
           <span className="source-heading">Authoritative Source Citations</span>
           <span className="source-count">{citations.length} source{citations.length > 1 ? "s" : ""}</span>
         </div>
@@ -72,6 +73,7 @@ export default function SourceEvidenceCard({ citations }: SourceEvidenceProps) {
         {citations.map((c, idx) => {
           const tier = getTierInfo(c);
           const isExpanded = expandedDoc === `${c.doc_id}-${idx}`;
+          const isCopied = copiedId === c.doc_id;
 
           return (
             <div
@@ -92,8 +94,13 @@ export default function SourceEvidenceCard({ citations }: SourceEvidenceProps) {
                   className="source-copy-btn"
                   onClick={(e) => copyCitation(c, e)}
                   title="Copy citation reference"
+                  aria-label={isCopied ? "Copied" : "Copy citation"}
                 >
-                  {copiedId === c.doc_id ? "✓ Copied" : "Copy Cite"}
+                  {isCopied ? (
+                    <><Check size={11} strokeWidth={2.5} aria-hidden="true" /> Copied</>
+                  ) : (
+                    <><Copy size={11} strokeWidth={1.75} aria-hidden="true" /> Copy Cite</>
+                  )}
                 </button>
               </div>
 

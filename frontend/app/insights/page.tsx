@@ -1,10 +1,28 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { ReactNode, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { InsightsReport, fetchInsights, login } from "../../lib/api";
 import LoginScreen, { AppSession } from "../../components/LoginScreen";
 import AppShell from "../../components/AppShell";
+import {
+  Ticket,
+  Clock,
+  Package,
+  DollarSign,
+  AlertTriangle,
+  CheckCircle2,
+  Search,
+  TrendingUp,
+  TrendingDown,
+  Minus,
+  Zap,
+  Truck,
+  Lock,
+  ArrowRight,
+  RefreshCw,
+  AlertCircle,
+} from "lucide-react";
 
 function MetricCard({
   title,
@@ -18,14 +36,14 @@ function MetricCard({
   value: string | number;
   subtext?: string;
   delta?: { value: number; label: string };
-  icon?: string;
+  icon?: ReactNode;
   badge?: string;
 }) {
   return (
     <div className="metric-card">
       <div className="metric-card-header">
         <span className="metric-card-title">{title}</span>
-        {icon && <span className="metric-card-icon">{icon}</span>}
+        {icon && <span className="metric-card-icon" aria-hidden="true">{icon}</span>}
       </div>
       <div className="metric-card-value-row">
         <div className="metric-card-value">{value}</div>
@@ -33,7 +51,14 @@ function MetricCard({
       </div>
       {delta && (
         <div className={`metric-delta ${delta.value > 0 ? "up" : delta.value < 0 ? "down" : "neutral"}`}>
-          {delta.value > 0 ? "▲ +" : delta.value < 0 ? "▼ " : "● "}
+          {delta.value > 0 ? (
+            <TrendingUp size={12} strokeWidth={2} aria-hidden="true" />
+          ) : delta.value < 0 ? (
+            <TrendingDown size={12} strokeWidth={2} aria-hidden="true" />
+          ) : (
+            <Minus size={12} strokeWidth={2} aria-hidden="true" />
+          )}
+          {delta.value > 0 ? " +" : " "}
           {delta.value}% {delta.label}
         </div>
       )}
@@ -49,7 +74,7 @@ function SectionCard({
   children,
 }: {
   title: string;
-  icon?: string;
+  icon?: ReactNode;
   badge?: string;
   children: React.ReactNode;
 }) {
@@ -57,7 +82,7 @@ function SectionCard({
     <section className="dashboard-section-card">
       <div className="section-card-header">
         <div className="section-title-wrap">
-          {icon && <span className="section-icon">{icon}</span>}
+          {icon && <span className="section-icon" aria-hidden="true">{icon}</span>}
           <h3>{title}</h3>
         </div>
         {badge && <span className="section-header-badge">{badge}</span>}
@@ -181,8 +206,10 @@ export default function InsightsPage() {
               className="refresh-btn"
               onClick={() => session && isStaff && loadData(session.token)}
               disabled={loading || !isStaff}
+              aria-label="Refresh metrics"
             >
-              {loading ? "Refreshing..." : "↻ Refresh Metrics"}
+              <RefreshCw size={13} strokeWidth={2} aria-hidden="true" className={loading ? "spin-icon" : ""} />
+              {loading ? "Refreshing..." : "Refresh Metrics"}
             </button>
           </div>
         </header>
@@ -190,18 +217,22 @@ export default function InsightsPage() {
         {/* Customer Access Restriction State */}
         {!isStaff ? (
           <div className="restricted-notice-card">
-            <div className="restricted-icon">🔒</div>
+            <div className="restricted-icon">
+              <Lock size={36} strokeWidth={1.5} aria-hidden="true" />
+            </div>
             <h3>Operations Insights is an Internal-Only Dashboard</h3>
             <p>
               Customer sessions are strictly limited to viewing their own account records to prevent cross-account leakage.
               To explore SLA risk monitoring and cross-account anomaly detection, switch to an internal staff session.
             </p>
             <button type="button" className="switch-staff-btn" onClick={switchToStaff}>
-              ➔ Switch to Internal Support Agent (Avery)
+              <ArrowRight size={15} strokeWidth={2} aria-hidden="true" />
+              Switch to Internal Support Agent (Avery)
             </button>
           </div>
         ) : error ? (
           <div className="error-box insights-error">
+            <AlertCircle size={15} strokeWidth={2} aria-hidden="true" />
             <strong>Error loading insights:</strong> {error}
           </div>
         ) : report ? (
@@ -212,26 +243,26 @@ export default function InsightsPage() {
                 title="Tickets This Week"
                 value={report.ticket_volume.totals.this_week}
                 delta={weekDelta != null ? { value: weekDelta, label: "vs prior week" } : undefined}
-                icon="🎟️"
+                icon={<Ticket size={16} strokeWidth={1.75} />}
               />
               <MetricCard
                 title="SLA Breaches / Risks"
                 value={report.sla_watchlist.length}
                 subtext="Open tickets requiring immediate attention"
                 badge={report.sla_watchlist.length > 0 ? "Action Required" : "Healthy"}
-                icon="⏱️"
+                icon={<Clock size={16} strokeWidth={1.75} />}
               />
               <MetricCard
                 title="Service Quality Anomalies"
                 value={report.service_quality.late_delivery_count + report.service_quality.late_pickup_count}
                 subtext={`${report.service_quality.late_delivery_count} late deliveries, ${report.service_quality.late_pickup_count} late pickups`}
-                icon="📦"
+                icon={<Package size={16} strokeWidth={1.75} />}
               />
               <MetricCard
                 title="Total Credit Exposure"
                 value={`$${report.credit_exposure.total_claimable_usd.toFixed(0)}`}
                 subtext="Claimable today across customer accounts"
-                icon="💵"
+                icon={<DollarSign size={16} strokeWidth={1.75} />}
               />
             </div>
 
@@ -240,14 +271,14 @@ export default function InsightsPage() {
               {/* SLA Watchlist Section */}
               <SectionCard
                 title={`SLA Watchlist (${report.sla_watchlist.length} Tickets)`}
-                icon="🚨"
+                icon={<AlertTriangle size={15} strokeWidth={1.75} />}
                 badge={report.sla_watchlist.length > 0 ? "Urgent" : "Cleared"}
               >
                 {report.sla_watchlist.length === 0 ? (
-                  <div className="empty-section-notice" style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '8px', padding: '32px 0', color: 'var(--green)' }}>
-                    <div style={{ fontSize: '32px' }}>🎉</div>
-                    <strong>All Clear!</strong>
-                    <span>All active tickets are within their contractual SLA window.</span>
+                  <div className="empty-state-block">
+                    <CheckCircle2 size={32} strokeWidth={1.5} className="empty-state-icon green" aria-hidden="true" />
+                    <strong className="empty-state-title">All Clear</strong>
+                    <span className="empty-state-desc">All active tickets are within their contractual SLA window.</span>
                   </div>
                 ) : (
                   <div className="sla-watchlist-table">
@@ -267,13 +298,17 @@ export default function InsightsPage() {
                               onClick={() => investigateTicket(t.ticket_id)}
                               title="Ask AI to investigate this ticket"
                             >
-                              Investigate with AI ➔
+                              Investigate with AI
+                              <ArrowRight size={11} strokeWidth={2} aria-hidden="true" />
                             </button>
                           </div>
                           <div className="sla-ticket-subject">{t.subject || "No subject provided"}</div>
                           <ul className="sla-problems-list">
                             {t.problems.map((p, pIdx) => (
-                              <li key={pIdx}>⚠️ {p}</li>
+                              <li key={pIdx}>
+                                <AlertCircle size={11} strokeWidth={2} aria-hidden="true" />
+                                {p}
+                              </li>
                             ))}
                           </ul>
                         </div>
@@ -287,7 +322,7 @@ export default function InsightsPage() {
               {report.cross_customer_patterns.length > 0 && (
                 <SectionCard
                   title="Cross-Customer Pattern Detection"
-                  icon="🔍"
+                  icon={<Search size={15} strokeWidth={1.75} />}
                   badge={`${report.cross_customer_patterns.length} Systemic Clusters`}
                 >
                   <div className="patterns-list">
@@ -311,7 +346,7 @@ export default function InsightsPage() {
               )}
 
               {/* Ticket Volume & Spikes */}
-              <SectionCard title="Ticket Volume & Spikes" icon="📈">
+              <SectionCard title="Ticket Volume & Spikes" icon={<TrendingUp size={15} strokeWidth={1.75} />}>
                 <div className="volume-categories-list">
                   {report.ticket_volume.by_category.slice(0, 6).map((c) => (
                     <div key={c.category} className="category-volume-row">
@@ -331,7 +366,10 @@ export default function InsightsPage() {
 
                 {report.ticket_volume.spikes.length > 0 && (
                   <div className="spikes-notice-area">
-                    <div className="spikes-heading">⚡ Significant Volume Spikes (&gt;2x prior week):</div>
+                    <div className="spikes-heading">
+                      <Zap size={12} strokeWidth={2} aria-hidden="true" />
+                      Significant Volume Spikes (&gt;2x prior week):
+                    </div>
                     {report.ticket_volume.spikes.map((s) => (
                       <div key={s.account_id} className="spike-card">
                         <span className="spike-name"><strong>{s.account_name}</strong> ({s.account_id})</span>
@@ -348,7 +386,7 @@ export default function InsightsPage() {
               </SectionCard>
 
               {/* Service Quality */}
-              <SectionCard title={`Service Quality (${report.service_quality.window_days}-Day Window)`} icon="🚚">
+              <SectionCard title={`Service Quality (${report.service_quality.window_days}-Day Window)`} icon={<Truck size={15} strokeWidth={1.75} />}>
                 <div className="service-quality-summary">
                   <div><strong>In-Flight Shipments:</strong> {report.service_quality.orders_in_flight}</div>
                   <div><strong>Late Pickups:</strong> {report.service_quality.late_pickup_count}</div>
@@ -359,9 +397,9 @@ export default function InsightsPage() {
                   <div className="quality-sublist">
                     <div className="sublist-heading">Late Pickups (&gt;10 min):</div>
                     {report.service_quality.late_pickups.length === 0 ? (
-                      <div className="no-items" style={{ padding: '16px 0', textAlign: 'center', opacity: 0.6 }}>
-                        <div style={{ fontSize: '24px', marginBottom: '4px' }}>✨</div>
-                        None recorded in window
+                      <div className="empty-state-block compact">
+                        <CheckCircle2 size={20} strokeWidth={1.5} className="empty-state-icon green" aria-hidden="true" />
+                        <span className="empty-state-desc">None recorded in window</span>
                       </div>
                     ) : (
                       <ul>
@@ -377,9 +415,9 @@ export default function InsightsPage() {
                   <div className="quality-sublist">
                     <div className="sublist-heading">Late Deliveries:</div>
                     {report.service_quality.late_deliveries.length === 0 ? (
-                      <div className="no-items" style={{ padding: '16px 0', textAlign: 'center', opacity: 0.6 }}>
-                        <div style={{ fontSize: '24px', marginBottom: '4px' }}>✨</div>
-                        None recorded in window
+                      <div className="empty-state-block compact">
+                        <CheckCircle2 size={20} strokeWidth={1.5} className="empty-state-icon green" aria-hidden="true" />
+                        <span className="empty-state-desc">None recorded in window</span>
                       </div>
                     ) : (
                       <ul>
@@ -395,7 +433,7 @@ export default function InsightsPage() {
               </SectionCard>
 
               {/* Credit Exposure & Manual Review */}
-              <SectionCard title="Service Credit Exposure" icon="💰">
+              <SectionCard title="Service Credit Exposure" icon={<DollarSign size={15} strokeWidth={1.75} />}>
                 <div className="exposure-by-account-grid">
                   {Object.entries(report.credit_exposure.claimable_now_usd_by_account).map(([acc, amt]) => (
                     <div key={acc} className="exposure-account-chip">
@@ -407,7 +445,10 @@ export default function InsightsPage() {
 
                 {report.credit_exposure.manual_review.length > 0 && (
                   <div className="manual-review-box">
-                    <div className="manual-review-title">⚠️ Flagged for Operations Review (Missing Contract Fields):</div>
+                    <div className="manual-review-title">
+                      <AlertTriangle size={13} strokeWidth={2} aria-hidden="true" />
+                      Flagged for Operations Review (Missing Contract Fields):
+                    </div>
                     {report.credit_exposure.manual_review.map((m, idx) => (
                       <div key={idx} className="manual-item">
                         <span><code>{m.order_id}</code>: {m.kind}</span>
@@ -421,15 +462,15 @@ export default function InsightsPage() {
             </div>
           </div>
         ) : (
-          <div className="insights-skeleton-container" style={{ display: 'flex', flexDirection: 'column', gap: '24px', opacity: 0.7, animation: 'pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite' }}>
-            <div style={{ display: 'flex', gap: '16px' }}>
+          <div className="insights-skeleton-container">
+            <div className="skeleton-kpi-row">
               {[1, 2, 3, 4].map(i => (
-                <div key={i} style={{ flex: 1, height: '120px', background: 'var(--panel)', borderRadius: '12px' }} />
+                <div key={i} className="skeleton-kpi-card" />
               ))}
             </div>
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '24px' }}>
-              <div style={{ height: '300px', background: 'var(--panel)', borderRadius: '14px' }} />
-              <div style={{ height: '300px', background: 'var(--panel)', borderRadius: '14px' }} />
+            <div className="skeleton-sections-grid">
+              <div className="skeleton-section-card" />
+              <div className="skeleton-section-card" />
             </div>
           </div>
         )}

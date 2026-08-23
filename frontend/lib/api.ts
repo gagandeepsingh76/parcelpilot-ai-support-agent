@@ -1,5 +1,6 @@
-export const API_BASE =
-  process.env.NEXT_PUBLIC_API_BASE_URL || "http://localhost:8000";
+export const API_BASE = (
+  process.env.NEXT_PUBLIC_API_BASE_URL || "http://localhost:8000"
+).replace(/\/+$/, "");
 
 export interface Citation {
   doc_id: string;
@@ -178,22 +179,75 @@ export interface RecordsSummary {
   recent_tickets?: any[];
 }
 
+/**
+ * Robust fetch wrapper that catches network/CORS failures and translates them
+ * into clean, user-friendly error messages rather than raw "Failed to fetch".
+ */
+async function safeFetch(url: string, init?: RequestInit): Promise<Response> {
+  try {
+    return await fetch(url, init);
+  } catch (err: any) {
+    if (err.name === "AbortError" || init?.signal?.aborted) {
+      throw err;
+    }
+    throw new Error(
+      `Unable to connect to ParcelPilot backend (${API_BASE}). Please check your connection and ensure the backend server is running.`
+    );
+  }
+}
+
+/**
+ * Parses HTTP error response details and maps them to appropriate user messages.
+ */
+async function parseErrorResponse(res: Response, fallbackPrefix: string): Promise<Error> {
+  let detail = "";
+  try {
+    const json = await res.json();
+    detail = json.detail || JSON.stringify(json);
+  } catch {
+    detail = await res.text().catch(() => "");
+  }
+
+  const normalized = (detail || "").toLowerCase();
+
+  if (
+    res.status === 429 ||
+    normalized.includes("429") ||
+    normalized.includes("quota") ||
+    normalized.includes("resource_exhausted")
+  ) {
+    return new Error(
+      "AI service is temporarily unavailable because the current API quota has been exhausted. Please try again later."
+    );
+  }
+
+  if (res.status === 401 || res.status === 403) {
+    return new Error(detail || "Access denied or session expired. Please sign in again.");
+  }
+
+  if (res.status === 503 || normalized.includes("503") || normalized.includes("service unavailable")) {
+    return new Error(detail || "AI service is temporarily unavailable. Please try again later.");
+  }
+
+  return new Error(detail || `${fallbackPrefix} (status ${res.status})`);
+}
+
 export async function login(sessionKey: string): Promise<string> {
-  const res = await fetch(`${API_BASE}/api/session/login`, {
+  const res = await safeFetch(`${API_BASE}/api/session/login`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ session_key: sessionKey }),
   });
-  if (!res.ok) throw new Error(`login failed (${res.status})`);
+  if (!res.ok) throw await parseErrorResponse(res, "Session login failed");
   const body = await res.json();
   return body.token as string;
 }
 
 export async function fetchMe(token: string): Promise<CallerInfo> {
-  const res = await fetch(`${API_BASE}/api/me`, {
+  const res = await safeFetch(`${API_BASE}/api/me`, {
     headers: { Authorization: `Bearer ${token}` },
   });
-  if (!res.ok) throw new Error(`me failed (${res.status})`);
+  if (!res.ok) throw await parseErrorResponse(res, "Failed to load user profile");
   return res.json();
 }
 
@@ -201,14 +255,13 @@ export async function credentialLogin(
   username: string,
   password: string
 ): Promise<{ token: string; caller: CallerInfo }> {
-  const res = await fetch(`${API_BASE}/api/auth/login`, {
+  const res = await safeFetch(`${API_BASE}/api/auth/login`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ username, password }),
   });
-  const body = await res.json();
-  if (!res.ok) throw new Error(body.detail || `sign-in failed (${res.status})`);
-  return body;
+  if (!res.ok) throw await parseErrorResponse(res, "Sign-in failed");
+  return res.json();
 }
 
 export async function sendChat(
@@ -217,38 +270,13 @@ export async function sendChat(
   history: { role: string; content: string }[],
   signal?: AbortSignal
 ): Promise<ChatTurn> {
-  const res = await fetch(`${API_BASE}/api/chat`, {
+  const res = await safeFetch(`${API_BASE}/api/chat`, {
     method: "POST",
     headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
     body: JSON.stringify({ message, history }),
     signal,
   });
-  if (!res.ok) {
-    const detail = await res.text();
-    let msg = detail;
-    try {
-      const parsed = JSON.parse(detail);
-      const errorMessage = parsed.detail || detail;
-      
-      // Handle quota and API failure errors gracefully
-      if (typeof errorMessage === "string") {
-        if (errorMessage.includes("429") || errorMessage.includes("Quota") || errorMessage.includes("RESOURCE_EXHAUSTED")) {
-          msg = "AI service is temporarily unavailable due to capacity limits. Please try again later.";
-        } else if (errorMessage.includes("503") || errorMessage.includes("Service Unavailable")) {
-          msg = "AI service is temporarily unavailable. Please try again later.";
-        } else {
-          msg = errorMessage;
-        }
-      } else {
-        msg = "AI service is temporarily unavailable. Please try again later.";
-      }
-    } catch {
-      if (detail.includes("429") || res.status === 429) {
-        msg = "AI service is temporarily unavailable due to capacity limits. Please try again later.";
-      }
-    }
-    throw new Error(msg || `Chat request failed (${res.status})`);
-  }
+  if (!res.ok) throw await parseErrorResponse(res, "Chat request failed");
   return res.json();
 }
 
@@ -257,13 +285,12 @@ export async function decideAction(
   pendingId: string,
   decision: "confirm" | "cancel"
 ): Promise<Record<string, unknown>> {
-  const res = await fetch(`${API_BASE}/api/actions/${pendingId}/${decision}`, {
+  const res = await safeFetch(`${API_BASE}/api/actions/${pendingId}/${decision}`, {
     method: "POST",
     headers: { Authorization: `Bearer ${token}` },
   });
-  const body = await res.json();
-  if (!res.ok) throw new Error(body.detail || `${decision} failed (${res.status})`);
-  return body;
+  if (!res.ok) throw await parseErrorResponse(res, `${decision} action failed`);
+  return res.json();
 }
 
 export interface InsightsReport {
@@ -311,54 +338,29 @@ export interface InsightsReport {
 }
 
 export async function fetchInsights(token: string): Promise<InsightsReport> {
-  const res = await fetch(`${API_BASE}/api/insights/summary`, {
+  const res = await safeFetch(`${API_BASE}/api/insights/summary`, {
     headers: { Authorization: `Bearer ${token}` },
   });
-  if (!res.ok) {
-    const detail = await res.text();
-    let msg = detail;
-    try {
-      const parsed = JSON.parse(detail);
-      const errorMessage = parsed.detail || detail;
-
-      if (typeof errorMessage === "string") {
-        if (errorMessage.includes("429") || errorMessage.includes("Quota") || errorMessage.includes("RESOURCE_EXHAUSTED")) {
-          msg = "Insights are temporarily unavailable due to capacity limits. Please try again later.";
-        } else if (errorMessage.includes("503") || errorMessage.includes("Service Unavailable")) {
-          msg = "Insights are temporarily unavailable. Please try again later.";
-        } else {
-          msg = errorMessage;
-        }
-      } else {
-        msg = "Insights are temporarily unavailable. Please try again later.";
-      }
-    } catch {
-      if (detail.includes("429") || res.status === 429) {
-        msg = "Insights are temporarily unavailable due to capacity limits. Please try again later.";
-      }
-    }
-    throw new Error(msg || `Insights failed (${res.status})`);
-  }
+  if (!res.ok) throw await parseErrorResponse(res, "Insights fetch failed");
   return res.json();
 }
 
 export async function fetchMetadata(): Promise<SystemMetadata> {
-  const res = await fetch(`${API_BASE}/api/metadata`);
-  if (!res.ok) throw new Error(`metadata failed (${res.status})`);
+  const res = await safeFetch(`${API_BASE}/api/metadata`);
+  if (!res.ok) throw await parseErrorResponse(res, "Metadata fetch failed");
   return res.json();
 }
 
 export async function fetchDocuments(): Promise<KnowledgeDocument[]> {
-  const res = await fetch(`${API_BASE}/api/documents`);
-  if (!res.ok) throw new Error(`documents failed (${res.status})`);
+  const res = await safeFetch(`${API_BASE}/api/documents`);
+  if (!res.ok) throw await parseErrorResponse(res, "Documents fetch failed");
   return res.json();
 }
 
 export async function fetchRecordsSummary(token: string): Promise<RecordsSummary> {
-  const res = await fetch(`${API_BASE}/api/records/summary`, {
+  const res = await safeFetch(`${API_BASE}/api/records/summary`, {
     headers: { Authorization: `Bearer ${token}` },
   });
-  if (!res.ok) throw new Error(`records summary failed (${res.status})`);
+  if (!res.ok) throw await parseErrorResponse(res, "Records summary fetch failed");
   return res.json();
 }
-

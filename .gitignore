@@ -46,3 +46,7 @@ powershell.cmd
 prompt.txt
 .commandcode/
 New folder/
+# IDE artefact directories to ignore
+Instruction Folder/
+evals/
+tests/
